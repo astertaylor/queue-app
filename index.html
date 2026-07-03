@@ -501,7 +501,7 @@ const STORE_KEY = 'queue_tasks_v1';
 const PROJ_KEY = 'queue_projects_v1';
 const WEIGHT_KEY = 'queue_weight_v1';
 
-const PALETTE = ['#5894e0','#FF4242','#FFA500','#00B442','#4169FF','#725CAD','#e0a458','#6fa8c9','#8a7fc7','#7ab88a','#d97a9a','#5fb3a3','#c97a5f','#d9c93e','#4fc3e0'];
+const PALETTE = ['#FF4242','#FFA500','#00B442','#4169FF','#725CAD','#e0a458','#6fa8c9','#8a7fc7','#7ab88a','#d97a9a','#5fb3a3','#c97a5f','#d9c93e','#4fc3e0'];
 
 function loadTasks(){
   try{ return JSON.parse(localStorage.getItem(STORE_KEY)) || []; }catch(e){ return []; }
