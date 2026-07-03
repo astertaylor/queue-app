@@ -220,7 +220,12 @@
     animation:slideup 0.22s ease-out;
   }
   @keyframes slideup{from{transform:translateY(24px);opacity:0.6;}to{transform:translateY(0);opacity:1;}}
-  .modal-handle{width:36px;height:4px;background:var(--line);border-radius:3px;margin:10px auto 14px;}
+  .modal-handle{
+    width:64px;height:26px;margin:2px auto 6px;
+    display:flex;align-items:center;justify-content:center;
+    touch-action:none;cursor:grab;
+  }
+  .modal-handle::after{content:"";width:36px;height:4px;background:var(--line);border-radius:3px;}
   .modal h2{font-size:16px;margin:0 0 16px;}
 
   .field{margin-bottom:14px;}
@@ -275,8 +280,27 @@
   .proj-pill.add-new{border-style:dashed;}
 
   .proj-dropdown-row{display:flex;gap:8px;}
-  .proj-dropdown-row select{flex:1;min-width:0;}
   .proj-dropdown-row .add-new{flex:0 0 auto;}
+  .proj-dropdown-btn{
+    flex:1;min-width:0;display:flex;align-items:center;gap:8px;
+    padding:9px 12px;background:var(--panel-2);border:1px solid var(--line);
+    border-radius:8px;color:var(--text);font-size:13.5px;font-weight:600;font-family:inherit;
+  }
+  .proj-dropdown-btn .swatch{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}
+  .proj-dropdown-btn .proj-dropdown-label{flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .proj-dropdown-btn .chev{width:15px;height:15px;flex:0 0 auto;color:var(--text-faint);}
+  .proj-dropdown-list{
+    margin-top:8px;max-height:220px;overflow-y:auto;
+    border:1px solid var(--line);border-radius:8px;background:var(--panel-2);
+  }
+  .proj-dropdown-item{
+    display:flex;align-items:center;gap:8px;width:100%;
+    padding:9px 12px;background:none;border:none;border-bottom:1px solid var(--line);
+    color:var(--text-dim);font-size:13.5px;font-weight:600;font-family:inherit;text-align:left;
+  }
+  .proj-dropdown-item:last-child{border-bottom:none;}
+  .proj-dropdown-item.selected{color:var(--text);}
+  .proj-dropdown-item .swatch{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}
 
   .prereq-list{display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto;}
   .prereq-item{
@@ -358,9 +382,14 @@
       <label>Project</label>
       <div class="proj-select-row" id="projSelectRow"></div>
       <div class="proj-dropdown-row" id="projDropdownRow" style="display:none;">
-        <select id="projDropdown"></select>
+        <button type="button" class="proj-dropdown-btn" id="projDropdownBtn">
+          <span class="swatch" id="projDropdownSwatch"></span>
+          <span class="proj-dropdown-label" id="projDropdownLabel"></span>
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
         <button type="button" class="proj-pill add-new" id="projDropdownAddBtn">+ New</button>
       </div>
+      <div class="proj-dropdown-list" id="projDropdownList" style="display:none;"></div>
     </div>
 
     <div class="toggle-row">
@@ -394,7 +423,7 @@
     </div>
 
     <div class="field" id="prereqField" style="display:none;">
-      <label>Prerequisites <span style="font-weight:400;color:var(--text-faint);">(within any project)</span></label>
+      <label>Prerequisites</label>
       <div class="prereq-list" id="prereqList"></div>
     </div>
 
@@ -567,7 +596,8 @@ if(projects.length === 0){
 }
 
 /* ---------- Scoring ---------- */
-// score = 1/(days_until_due, floored) - weight * hours (shorter tasks score higher)
+// score = 1/(days_until_due, floored) - weight * hours + SCORE_OFFSET, floored at 0
+// (shorter tasks score higher; offset/floor keep everyday scores positive and human-scaled)
 // overdue tasks: always sort above all non-overdue tasks, ranked by how overdue (more overdue = higher)
 // backburner: ignored time factors, placed in back-middle of the queue
 // undated tasks: gain urgency with age since creation, saturating toward a ceiling
@@ -577,6 +607,7 @@ if(projects.length === 0){
 const DAY_MS = 86400000;
 const UNDATED_CEILING = 1/7;   // score ceiling for undated tasks (excludes duration term)
 const UNDATED_HALF_LIFE = 7;   // days for undated urgency to reach half the ceiling
+const SCORE_OFFSET = 50;       // shifts non-overdue scores into a positive, human-scaled range
 
 function daysUntil(task){
   if(!task.dueDate) return null; // no due date
@@ -598,14 +629,14 @@ function computeScore(task){
     // Undated: saturating curve toward UNDATED_CEILING, never reaching it.
     const age = Math.max(daysSinceCreated(task), 0);
     const urgency = UNDATED_CEILING * (age / (age + UNDATED_HALF_LIFE));
-    return urgency - weight * hrs;
+    return Math.max(0, urgency - weight * hrs + SCORE_OFFSET);
   }
   if(d < 0){
     // overdue: score grows the more overdue it is, always > any on-time score band
     return 10000 + Math.abs(d) * 100;
   }
   const denom = Math.max(d, 0.02); // cap near-zero/today to avoid infinity, per spec
-  return (1/denom) - weight * hrs;
+  return Math.max(0, (1/denom) - weight * hrs + SCORE_OFFSET);
 }
 
 /* ---------- Priority color gradient ---------- */
@@ -1203,14 +1234,30 @@ function renderProjSelect(selectedId){
   dropdownRow.style.display = useDropdown ? 'flex' : 'none';
 
   if(useDropdown){
-    const select = document.getElementById('projDropdown');
-    select.innerHTML = '';
+    const btn = document.getElementById('projDropdownBtn');
+    const list = document.getElementById('projDropdownList');
+    const chosen = projects.find(p => p.id === selectedId) || projects[0];
+    btn.dataset.projId = chosen.id;
+    document.getElementById('projDropdownSwatch').style.background = chosen.color;
+    document.getElementById('projDropdownLabel').textContent = chosen.name;
+
+    list.innerHTML = '';
+    list.style.display = 'none';
     projects.forEach(p => {
-      const opt = document.createElement('option');
-      opt.value = p.id;
-      opt.textContent = p.name;
-      if(p.id === selectedId) opt.selected = true;
-      select.appendChild(opt);
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'proj-dropdown-item' + (p.id === chosen.id ? ' selected' : '');
+      item.dataset.projId = p.id;
+      item.innerHTML = `<span class="swatch" style="background:${p.color}"></span>${p.name}`;
+      item.addEventListener('click', () => {
+        btn.dataset.projId = p.id;
+        document.getElementById('projDropdownSwatch').style.background = p.color;
+        document.getElementById('projDropdownLabel').textContent = p.name;
+        list.querySelectorAll('.proj-dropdown-item').forEach(x => x.classList.remove('selected'));
+        item.classList.add('selected');
+        list.style.display = 'none';
+      });
+      list.appendChild(item);
     });
     return;
   }
@@ -1238,9 +1285,14 @@ function renderProjSelect(selectedId){
 
 document.getElementById('projDropdownAddBtn').addEventListener('click', openProjModal);
 
+document.getElementById('projDropdownBtn').addEventListener('click', () => {
+  const list = document.getElementById('projDropdownList');
+  list.style.display = list.style.display === 'none' ? 'block' : 'none';
+});
+
 function getSelectedProjId(){
   if(document.getElementById('projDropdownRow').style.display !== 'none'){
-    return document.getElementById('projDropdown').value;
+    return document.getElementById('projDropdownBtn').dataset.projId;
   }
   const sel = document.querySelector('#projSelectRow .proj-pill.selected');
   return sel ? sel.dataset.projId : projects[0].id;
@@ -1481,6 +1533,42 @@ document.getElementById('closeWeightBtn').addEventListener('click', () => {
 [taskModalBackdrop, projModalBackdrop, projEditModalBackdrop, projConfirmBackdrop, weightSettings].forEach(bd => {
   bd.addEventListener('click', (e) => { if(e.target === bd) bd.classList.remove('open'); });
 });
+
+/* ---------- Swipe-down-to-dismiss on modal handles ---------- */
+function enableSwipeToDismiss(handle){
+  const modal = handle.closest('.modal');
+  const backdrop = handle.closest('.modal-backdrop');
+  if(!modal || !backdrop) return;
+  const DISMISS_THRESHOLD = 80;
+  let startY = 0;
+  let dragging = false;
+
+  handle.addEventListener('pointerdown', (e) => {
+    dragging = true;
+    startY = e.clientY;
+    modal.style.transition = 'none';
+    handle.setPointerCapture(e.pointerId);
+  });
+
+  handle.addEventListener('pointermove', (e) => {
+    if(!dragging) return;
+    const dy = Math.max(0, e.clientY - startY);
+    modal.style.transform = `translateY(${dy}px)`;
+  });
+
+  function endDrag(e){
+    if(!dragging) return;
+    dragging = false;
+    const dy = Math.max(0, e.clientY - startY);
+    modal.style.transition = '';
+    modal.style.transform = '';
+    if(dy > DISMISS_THRESHOLD) backdrop.classList.remove('open');
+  }
+  handle.addEventListener('pointerup', endDrag);
+  handle.addEventListener('pointercancel', endDrag);
+}
+
+document.querySelectorAll('.modal-handle').forEach(enableSwipeToDismiss);
 
 /* ---------- Init ---------- */
 render();
