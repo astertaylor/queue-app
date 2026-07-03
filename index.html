@@ -596,18 +596,23 @@ if(projects.length === 0){
 }
 
 /* ---------- Scoring ---------- */
-// score = 1/(days_until_due, floored) - weight * hours + SCORE_OFFSET, floored at 0
-// (shorter tasks score higher; offset/floor keep everyday scores positive and human-scaled)
-// overdue tasks: always sort above all non-overdue tasks, ranked by how overdue (more overdue = higher)
-// backburner: ignored time factors, placed in back-middle of the queue
-// undated tasks: gain urgency with age since creation, saturating toward a ceiling
-// equivalent to a task due in ~7 days (1/7 ≈ 0.143), so they can only ever
-// outrank tasks that are comfortably far out, never anything due sooner, and
-// never anything overdue.
+// Urgency is a 0-100 exponential decay on days-until-due (due today = 100,
+// each TAU_DUE days out roughly a third of the previous value), which spreads
+// tasks out over the usual multi-week planning horizon instead of bunching
+// them all near one value. Duration is a saturating penalty (bounded by
+// DURATION_SCALE * weight) rather than an unbounded subtraction, so scores
+// can't run away negative. Overdue tasks always outrank on-time ones, on
+// their own 100-150 band, growing with how overdue they are; duration doesn't
+// affect overdue tasks, only how late they are. Backburner tasks ignore all
+// of this and sit in their own back-middle bucket regardless of score.
 const DAY_MS = 86400000;
-const UNDATED_CEILING = 1/7;   // score ceiling for undated tasks (excludes duration term)
-const UNDATED_HALF_LIFE = 7;   // days for undated urgency to reach half the ceiling
-const SCORE_OFFSET = 50;       // shifts non-overdue scores into a positive, human-scaled range
+const TAU_DUE = 5;               // days for due-date urgency to decay by ~63%
+const TAU_OVERDUE = 5;           // days for overdue bonus to approach its cap
+const OVERDUE_BONUS_CAP = 50;    // overdue tasks range from 100 up to 100+this
+const UNDATED_HALF_LIFE = 7;     // days for undated urgency to reach half its ceiling
+const UNDATED_CEILING = 100 * Math.exp(-7 / TAU_DUE); // "as urgent as due in ~a week"
+const DURATION_SCALE = 20;       // max points a task's duration can remove, at weight=1
+const DURATION_HALF_HOURS = 4;   // hours for the duration penalty to reach half its cap
 
 function daysUntil(task){
   if(!task.dueDate) return null; // no due date
@@ -621,6 +626,10 @@ function daysSinceCreated(task){
   return (Date.now() - created) / DAY_MS;
 }
 
+function durationPenalty(hrs){
+  return weight * DURATION_SCALE * (hrs / (hrs + DURATION_HALF_HOURS));
+}
+
 function computeScore(task){
   const hrs = (task.durationMin || 0) / 60;
   const d = daysUntil(task);
@@ -629,14 +638,14 @@ function computeScore(task){
     // Undated: saturating curve toward UNDATED_CEILING, never reaching it.
     const age = Math.max(daysSinceCreated(task), 0);
     const urgency = UNDATED_CEILING * (age / (age + UNDATED_HALF_LIFE));
-    return Math.max(0, urgency - weight * hrs + SCORE_OFFSET);
+    return Math.max(0, urgency - durationPenalty(hrs));
   }
   if(d < 0){
     // overdue: score grows the more overdue it is, always > any on-time score band
-    return 10000 + Math.abs(d) * 100;
+    return 100 + OVERDUE_BONUS_CAP * (1 - Math.exp(Math.abs(d) / -TAU_OVERDUE));
   }
-  const denom = Math.max(d, 0.02); // cap near-zero/today to avoid infinity, per spec
-  return Math.max(0, (1/denom) - weight * hrs + SCORE_OFFSET);
+  const urgency = 100 * Math.exp(-d / TAU_DUE);
+  return Math.max(0, urgency - durationPenalty(hrs));
 }
 
 /* ---------- Priority color gradient ---------- */
