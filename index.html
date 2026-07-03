@@ -86,6 +86,18 @@
     border-radius:10px;
     cursor:pointer;
   }
+  .drag-handle{
+    flex:0 0 auto;width:22px;height:22px;
+    display:flex;align-items:center;justify-content:center;
+    color:var(--text-faint);touch-action:none;cursor:grab;
+    margin:-4px 0 -4px -6px;
+  }
+  .drag-handle svg{width:18px;height:18px;}
+  .proj-group-placeholder{
+    margin:4px 0;border-radius:10px;
+    border:1.5px dashed var(--line);
+    background:var(--panel-2);
+  }
   .proj-group-header .swatch{width:10px;height:10px;border-radius:50%;flex:0 0 auto;}
   .proj-group-header .pg-name{font-size:14px;font-weight:700;flex:1;}
   .proj-group-header .pg-count{font-size:12px;color:var(--text-dim);}
@@ -131,6 +143,8 @@
   .task-main{flex:1;min-width:0;}
   .task-title{font-size:14.5px;font-weight:600;color:var(--text);word-break:break-word;}
   .task.done .task-title{text-decoration:line-through;color:var(--text-dim);}
+  .task-notes{font-size:12.5px;color:var(--text-dim);margin-top:3px;word-break:break-word;white-space:pre-wrap;}
+  .task.done .task-notes{color:var(--text-faint);}
   .task-meta{display:flex;flex-wrap:wrap;gap:6px 10px;margin-top:4px;font-size:12px;color:var(--text-dim);}
   .task-meta .m-item{display:flex;align-items:center;gap:3px;}
   .task-meta .overdue-txt{color:var(--overdue);font-weight:700;}
@@ -215,7 +229,8 @@
   .field input[type=number],
   .field input[type=date],
   .field input[type=time],
-  .field select{
+  .field select,
+  .field textarea{
     width:100%;padding:10px 12px;
     background:var(--panel-2);
     border:1px solid var(--line);
@@ -224,7 +239,8 @@
     font-size:15px;
     font-family:inherit;
   }
-  .field input:focus,.field select:focus{outline:2px solid var(--focus);outline-offset:1px;}
+  .field textarea{resize:vertical;min-height:64px;line-height:1.4;}
+  .field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--focus);outline-offset:1px;}
   .row2{display:flex;gap:10px;}
   .row2 > *{flex:1;min-width:0;}
 
@@ -257,6 +273,10 @@
   .proj-pill.selected{border-color:var(--amber);color:var(--text);}
   .proj-pill .swatch{width:9px;height:9px;border-radius:50%;}
   .proj-pill.add-new{border-style:dashed;}
+
+  .proj-dropdown-row{display:flex;gap:8px;}
+  .proj-dropdown-row select{flex:1;min-width:0;}
+  .proj-dropdown-row .add-new{flex:0 0 auto;}
 
   .prereq-list{display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto;}
   .prereq-item{
@@ -337,6 +357,10 @@
     <div class="field">
       <label>Project</label>
       <div class="proj-select-row" id="projSelectRow"></div>
+      <div class="proj-dropdown-row" id="projDropdownRow" style="display:none;">
+        <select id="projDropdown"></select>
+        <button type="button" class="proj-pill add-new" id="projDropdownAddBtn">+ New</button>
+      </div>
     </div>
 
     <div class="toggle-row">
@@ -372,6 +396,11 @@
     <div class="field" id="prereqField" style="display:none;">
       <label>Prerequisites <span style="font-weight:400;color:var(--text-faint);">(within any project)</span></label>
       <div class="prereq-list" id="prereqList"></div>
+    </div>
+
+    <div class="field">
+      <label for="f-notes">Notes</label>
+      <textarea id="f-notes" placeholder="Add details…" rows="3"></textarea>
     </div>
 
     <div class="toggle-row">
@@ -480,7 +509,7 @@
 <div class="weight-settings" id="weightSettings">
   <div class="weight-card">
     <h3>Priority weight</h3>
-    <p>Higher weight makes longer tasks rank lower in the queue, regardless of due date. Lower weight makes due dates dominate.</p>
+    <p>Higher weight makes shorter tasks rank higher in the queue, regardless of due date. Lower weight makes due dates dominate.</p>
     <div class="weight-row">
       <span class="mono" style="font-size:12px;color:var(--text-faint);">0</span>
       <input type="range" id="weightSlider" min="0" max="2" step="0.05" value="0.5">
@@ -501,7 +530,7 @@ const STORE_KEY = 'queue_tasks_v1';
 const PROJ_KEY = 'queue_projects_v1';
 const WEIGHT_KEY = 'queue_weight_v1';
 
-const PALETTE = ['#FF4242','#FFA500','#00B442','#4169FF','#725CAD','#e0a458','#6fa8c9','#8a7fc7','#7ab88a','#d97a9a','#5fb3a3','#c97a5f','#d9c93e','#4fc3e0'];
+const PALETTE = ['#FFFFFF','#FF4242','#FFA500','#00B442','#4169FF','#725CAD','#FF7070','#CC2020','#FFC04D','#CC8400','#4DD481','#008530','#7A94FF','#2A4ACC','#9884C9','#E8D74A'];
 
 function loadTasks(){
   try{ return JSON.parse(localStorage.getItem(STORE_KEY)) || []; }catch(e){ return []; }
@@ -538,7 +567,7 @@ if(projects.length === 0){
 }
 
 /* ---------- Scoring ---------- */
-// score = 1/(days_until_due, floored) + weight * hours
+// score = 1/(days_until_due, floored) - weight * hours (shorter tasks score higher)
 // overdue tasks: always sort above all non-overdue tasks, ranked by how overdue (more overdue = higher)
 // backburner: ignored time factors, placed in back-middle of the queue
 // undated tasks: gain urgency with age since creation, saturating toward a ceiling
@@ -569,14 +598,61 @@ function computeScore(task){
     // Undated: saturating curve toward UNDATED_CEILING, never reaching it.
     const age = Math.max(daysSinceCreated(task), 0);
     const urgency = UNDATED_CEILING * (age / (age + UNDATED_HALF_LIFE));
-    return urgency + weight * hrs;
+    return urgency - weight * hrs;
   }
   if(d < 0){
     // overdue: score grows the more overdue it is, always > any on-time score band
     return 10000 + Math.abs(d) * 100;
   }
   const denom = Math.max(d, 0.02); // cap near-zero/today to avoid infinity, per spec
-  return (1/denom) + weight * hrs;
+  return (1/denom) - weight * hrs;
+}
+
+/* ---------- Priority color gradient ---------- */
+// Maps a task's score, relative to the spread of currently visible non-overdue,
+// non-backburner tasks, onto a dim->amber->overdue color ramp. Overdue tasks
+// always sit at the hot end; backburner/done tasks are excluded (they keep
+// their existing dimmed treatment).
+let scoreRange = {min:0, max:1};
+
+function computeScoreRange(list){
+  const scores = list
+    .filter(t => !t.backburner)
+    .filter(t => { const d = daysUntil(t); return d === null || d >= 0; })
+    .map(computeScore);
+  if(scores.length === 0) return {min:0, max:1};
+  return {min: Math.min(...scores), max: Math.max(...scores)};
+}
+
+function hexToRgb(hex){
+  const h = hex.replace('#','');
+  return {r:parseInt(h.slice(0,2),16), g:parseInt(h.slice(2,4),16), b:parseInt(h.slice(4,6),16)};
+}
+function lerpHex(a, b, t){
+  const pa = hexToRgb(a), pb = hexToRgb(b);
+  const r = Math.round(pa.r + (pb.r - pa.r) * t);
+  const g = Math.round(pa.g + (pb.g - pa.g) * t);
+  const bch = Math.round(pa.b + (pb.b - pa.b) * t);
+  return {r, g, b: bch};
+}
+function priorityRgb(frac){
+  if(frac <= 0.5) return lerpHex('#3f6ba8', '#5894e0', frac / 0.5);
+  return lerpHex('#5894e0', '#d9704f', (frac - 0.5) / 0.5);
+}
+function lerpTowardsPanel(rgb, amount){
+  const panel = hexToRgb('#1c2025');
+  const r = Math.round(panel.r + (rgb.r - panel.r) * amount);
+  const g = Math.round(panel.g + (rgb.g - panel.g) * amount);
+  const b = Math.round(panel.b + (rgb.b - panel.b) * amount);
+  return `${r},${g},${b}`;
+}
+function priorityFrac(task){
+  if(task.backburner) return 0;
+  const d = daysUntil(task);
+  if(d !== null && d < 0) return 1; // overdue: always hottest
+  const span = scoreRange.max - scoreRange.min;
+  if(span <= 0) return 0.5;
+  return Math.min(1, Math.max(0, (computeScore(task) - scoreRange.min) / span));
 }
 
 function isBlocked(task){
@@ -656,6 +732,8 @@ function render(){
   empty.style.display = 'none';
   main.style.display = 'block';
 
+  scoreRange = computeScoreRange(list);
+
   if(currentFilter === 'done'){
     list.sort((a,b) => (b.completedAt||0) - (a.completedAt||0));
     main.appendChild(renderGroup(list, null));
@@ -710,15 +788,22 @@ function renderByProject(list, main){
 
     const groupEl = document.createElement('div');
     groupEl.className = 'proj-group';
+    groupEl.dataset.projId = proj.id;
 
     const isCollapsed = collapsedProjects.has(proj.id);
 
     const header = document.createElement('div');
     header.className = 'proj-group-header' + (isCollapsed ? ' collapsed' : '');
     header.innerHTML = `
+      <span class="drag-handle" data-proj-id="${proj.id}" aria-label="Drag to reorder">
+        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>
+      </span>
       <span class="swatch" style="background:${proj.color}"></span>
       <span class="pg-name">${proj.name}</span>
       <span class="pg-count mono">${ordered.length}</span>
+      <button type="button" class="pg-edit-btn pg-add-btn" aria-label="Add task to ${proj.name}" data-proj-id="${proj.id}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
       <button type="button" class="pg-edit-btn" aria-label="Edit project" data-proj-id="${proj.id}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 005 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
       </button>
@@ -749,7 +834,7 @@ function renderByProject(list, main){
     }
 
     header.addEventListener('click', (e) => {
-      if(e.target.closest('.pg-edit-btn')) return; // handled separately, don't toggle collapse
+      if(e.target.closest('.pg-edit-btn') || e.target.closest('.drag-handle')) return; // handled separately, don't toggle collapse
       const nowCollapsed = !collapsedProjects.has(proj.id);
       if(nowCollapsed) collapsedProjects.add(proj.id); else collapsedProjects.delete(proj.id);
       saveCollapsed();
@@ -757,10 +842,15 @@ function renderByProject(list, main){
       body.classList.toggle('collapsed', nowCollapsed);
     });
 
-    header.querySelector('.pg-edit-btn').addEventListener('click', (e) => {
+    header.querySelector('.pg-add-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openAddModal(proj.id);
+    });
+
+    header.querySelectorAll('.pg-edit-btn:not(.pg-add-btn)').forEach(btn => btn.addEventListener('click', (e) => {
       e.stopPropagation();
       openProjEditModal(proj.id);
-    });
+    }));
 
     groupEl.appendChild(header);
     groupEl.appendChild(body);
@@ -776,6 +866,13 @@ function renderTask(t){
 
   const el = document.createElement('div');
   el.className = 'task' + (t.done ? ' done' : '') + (t.backburner ? ' backburner' : '');
+
+  if(!t.done && !t.backburner){
+    const frac = priorityFrac(t);
+    const c = priorityRgb(frac);
+    el.style.borderColor = `rgba(${c.r},${c.g},${c.b},${(0.25 + frac * 0.55).toFixed(2)})`;
+    el.style.background = `rgb(${lerpTowardsPanel(c, 0.06 + frac * 0.14)})`;
+  }
 
   const bar = document.createElement('div');
   bar.className = 'proj-bar';
@@ -840,6 +937,13 @@ function renderTask(t){
     bTag.className = 'tag backburner';
     bTag.textContent = 'Backburner';
     meta.appendChild(bTag);
+  }
+
+  if(t.notes){
+    const notesEl = document.createElement('div');
+    notesEl.className = 'task-notes';
+    notesEl.textContent = t.notes;
+    mainCol.appendChild(notesEl);
   }
 
   mainCol.appendChild(meta);
@@ -910,6 +1014,89 @@ function nextRecurDate(dateStr, freq){
   return d.toISOString().slice(0,10);
 }
 
+/* ---------- Project drag-to-reorder (By project tab) ---------- */
+(function initProjectDragReorder(){
+  const main = document.getElementById('mainList');
+
+  main.addEventListener('pointerdown', (e) => {
+    const handle = e.target.closest('.drag-handle');
+    if(!handle) return;
+    e.preventDefault();
+
+    const groupEl = handle.closest('.proj-group');
+    if(!groupEl) return;
+
+    const rect = groupEl.getBoundingClientRect();
+    const placeholder = document.createElement('div');
+    placeholder.className = 'proj-group-placeholder';
+    placeholder.style.height = rect.height + 'px';
+    groupEl.parentNode.insertBefore(placeholder, groupEl);
+
+    groupEl.style.position = 'fixed';
+    groupEl.style.zIndex = '100';
+    groupEl.style.width = rect.width + 'px';
+    groupEl.style.left = rect.left + 'px';
+    groupEl.style.top = rect.top + 'px';
+    groupEl.style.pointerEvents = 'none';
+    groupEl.style.boxShadow = '0 8px 24px rgba(0,0,0,0.4)';
+    document.body.appendChild(groupEl);
+
+    const startY = e.clientY;
+    const origTop = rect.top;
+    handle.setPointerCapture(e.pointerId);
+
+    function onMove(ev){
+      const top = origTop + (ev.clientY - startY);
+      groupEl.style.top = top + 'px';
+      const groupMidY = top + rect.height / 2;
+
+      const siblings = Array.from(main.children).filter(el =>
+        el.classList.contains('proj-group') || el.classList.contains('proj-group-placeholder'));
+      const phIndex = siblings.indexOf(placeholder);
+
+      const next = siblings[phIndex + 1];
+      if(next){
+        const nRect = next.getBoundingClientRect();
+        if(groupMidY > nRect.top + nRect.height / 2){
+          main.insertBefore(next, placeholder);
+          return;
+        }
+      }
+      const prev = siblings[phIndex - 1];
+      if(prev){
+        const pRect = prev.getBoundingClientRect();
+        if(groupMidY < pRect.top + pRect.height / 2){
+          main.insertBefore(placeholder, prev);
+        }
+      }
+    }
+
+    function onUp(ev){
+      handle.releasePointerCapture(ev.pointerId);
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+
+      placeholder.parentNode.insertBefore(groupEl, placeholder);
+      placeholder.remove();
+      groupEl.style.position = '';
+      groupEl.style.zIndex = '';
+      groupEl.style.width = '';
+      groupEl.style.left = '';
+      groupEl.style.top = '';
+      groupEl.style.pointerEvents = '';
+      groupEl.style.boxShadow = '';
+
+      const newOrderIds = Array.from(main.querySelectorAll('.proj-group')).map(g => g.dataset.projId);
+      projects.sort((a, b) => newOrderIds.indexOf(a.id) - newOrderIds.indexOf(b.id));
+      saveProjects(projects);
+      render();
+    }
+
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+  });
+})();
+
 /* ---------- Filter bar ---------- */
 document.getElementById('filterBar').addEventListener('click', (e) => {
   const chip = e.target.closest('.chip');
@@ -924,15 +1111,17 @@ document.getElementById('filterBar').addEventListener('click', (e) => {
 const taskModalBackdrop = document.getElementById('taskModalBackdrop');
 const fabAdd = document.getElementById('fabAdd');
 
-function openAddModal(){
+function openAddModal(presetProjectId){
   editingTaskId = null;
   document.getElementById('modalTitle').textContent = 'New task';
   document.getElementById('f-title').value = '';
   document.getElementById('f-date').value = new Date().toISOString().slice(0,10);
   document.getElementById('f-time').value = '';
-  document.getElementById('f-nodue').checked = false;
-  document.getElementById('dueFieldsRow').style.display = 'flex';
-  document.getElementById('f-dur').value = '';
+  document.getElementById('f-nodue').checked = true;
+  document.getElementById('dueFieldsRow').style.display = 'none';
+  document.getElementById('recurToggleRow').style.display = 'none';
+  document.getElementById('f-dur').value = 30;
+  document.getElementById('f-notes').value = '';
   durUnit = 'min';
   document.querySelectorAll('.unit-btn').forEach(b => b.classList.toggle('active', b.dataset.unit === 'min'));
   document.getElementById('f-backburner').checked = false;
@@ -940,8 +1129,9 @@ function openAddModal(){
   document.getElementById('recurPanel').style.display = 'none';
   document.getElementById('f-recur-freq').value = 'weekly';
   document.getElementById('deleteRow').style.display = 'none';
-  renderProjSelect(projects[0].id);
-  renderPrereqList(null, projects[0].id);
+  const startProjId = (presetProjectId && projects.some(p => p.id === presetProjectId)) ? presetProjectId : projects[0].id;
+  renderProjSelect(startProjId);
+  renderPrereqList(null, []);
   taskModalBackdrop.classList.add('open');
 }
 
@@ -964,13 +1154,14 @@ function openEditModal(id){
     document.getElementById('f-dur').value = t.durationMin;
   }
   document.querySelectorAll('.unit-btn').forEach(b => b.classList.toggle('active', b.dataset.unit === durUnit));
+  document.getElementById('f-notes').value = t.notes || '';
   document.getElementById('f-backburner').checked = !!t.backburner;
   document.getElementById('f-recurs').checked = !!t.recurs;
   document.getElementById('recurPanel').style.display = t.recurs ? 'block' : 'none';
   document.getElementById('f-recur-freq').value = t.recurFreq || 'weekly';
   document.getElementById('deleteRow').style.display = 'flex';
   renderProjSelect(t.projectId);
-  renderPrereqList(t.id, t.projectId, t.prereqIds || []);
+  renderPrereqList(t.id, t.prereqIds || []);
   taskModalBackdrop.classList.add('open');
 }
 
@@ -1001,8 +1192,29 @@ document.getElementById('f-nodue').addEventListener('change', (e) => {
   }
 });
 
+const PROJ_DROPDOWN_THRESHOLD = 6; // switch pills -> dropdown once there are more projects than this
+
 function renderProjSelect(selectedId){
   const row = document.getElementById('projSelectRow');
+  const dropdownRow = document.getElementById('projDropdownRow');
+  const useDropdown = projects.length > PROJ_DROPDOWN_THRESHOLD;
+
+  row.style.display = useDropdown ? 'none' : 'flex';
+  dropdownRow.style.display = useDropdown ? 'flex' : 'none';
+
+  if(useDropdown){
+    const select = document.getElementById('projDropdown');
+    select.innerHTML = '';
+    projects.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.name;
+      if(p.id === selectedId) opt.selected = true;
+      select.appendChild(opt);
+    });
+    return;
+  }
+
   row.innerHTML = '';
   projects.forEach(p => {
     const pill = document.createElement('button');
@@ -1013,7 +1225,6 @@ function renderProjSelect(selectedId){
     pill.addEventListener('click', () => {
       row.querySelectorAll('.proj-pill').forEach(x => x.classList.remove('selected'));
       pill.classList.add('selected');
-      renderPrereqList(editingTaskId, p.id, editingTaskId ? (tasks.find(t=>t.id===editingTaskId)?.prereqIds||[]) : []);
     });
     row.appendChild(pill);
   });
@@ -1025,23 +1236,29 @@ function renderProjSelect(selectedId){
   row.appendChild(addPill);
 }
 
+document.getElementById('projDropdownAddBtn').addEventListener('click', openProjModal);
+
 function getSelectedProjId(){
+  if(document.getElementById('projDropdownRow').style.display !== 'none'){
+    return document.getElementById('projDropdown').value;
+  }
   const sel = document.querySelector('#projSelectRow .proj-pill.selected');
   return sel ? sel.dataset.projId : projects[0].id;
 }
 
-function renderPrereqList(currentTaskId, projectId, checkedIds){
+function renderPrereqList(currentTaskId, checkedIds){
   const field = document.getElementById('prereqField');
   const list = document.getElementById('prereqList');
   list.innerHTML = '';
-  const candidates = tasks.filter(t => t.projectId === projectId && t.id !== currentTaskId && !t.done);
+  const candidates = tasks.filter(t => t.id !== currentTaskId && !t.done);
   if(candidates.length === 0){
     field.style.display = 'block';
-    list.innerHTML = '<div class="prereq-empty">No other open tasks in this project yet.</div>';
+    list.innerHTML = '<div class="prereq-empty">No other open tasks yet.</div>';
     return;
   }
   field.style.display = 'block';
   candidates.forEach(c => {
+    const cProj = projFor(c);
     const row = document.createElement('label');
     row.className = 'prereq-item';
     const cb = document.createElement('input');
@@ -1049,6 +1266,12 @@ function renderPrereqList(currentTaskId, projectId, checkedIds){
     cb.value = c.id;
     cb.checked = (checkedIds || []).includes(c.id);
     row.appendChild(cb);
+    if(cProj){
+      const swatch = document.createElement('span');
+      swatch.className = 'swatch';
+      swatch.style.cssText = `width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:${cProj.color}`;
+      row.appendChild(swatch);
+    }
     const span = document.createElement('span');
     span.textContent = c.title;
     row.appendChild(span);
@@ -1069,14 +1292,15 @@ document.getElementById('saveTaskBtn').addEventListener('click', () => {
   const recurs = document.getElementById('f-recurs').checked && !!dueDate;
   const recurFreq = document.getElementById('f-recur-freq').value;
   const prereqIds = Array.from(document.querySelectorAll('#prereqList input:checked')).map(cb => cb.value);
+  const notes = document.getElementById('f-notes').value.trim();
 
   if(editingTaskId){
     const t = tasks.find(x => x.id === editingTaskId);
-    Object.assign(t, {title, dueDate, dueTime, durationMin, projectId, backburner, recurs, recurFreq, prereqIds});
+    Object.assign(t, {title, dueDate, dueTime, durationMin, projectId, backburner, recurs, recurFreq, prereqIds, notes});
   } else {
     tasks.push({
       id: uid(), title, dueDate, dueTime, durationMin, projectId,
-      backburner, recurs, recurFreq, prereqIds,
+      backburner, recurs, recurFreq, prereqIds, notes,
       done:false, completedAt:null, createdAt: Date.now()
     });
   }
