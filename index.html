@@ -1,0 +1,1272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#15181c">
+<title>Queue</title>
+<link rel="manifest" href="manifest.json">
+<style>
+  :root{
+    --bg:#15181c;
+    --panel:#1c2025;
+    --panel-2:#22262c;
+    --line:#2c3138;
+    --text:#e8e6e1;
+    --text-dim:#8b9099;
+    --text-faint:#565c65;
+    --amber:#5894e0;
+    --amber-dim:#3f6ba8;
+    --accent-ink:#0c1a2e;
+    --overdue:#d9704f;
+    --done:#5c8a72;
+    --backburner:#565c65;
+    --focus:#5894e0;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    font-size:15px;
+    line-height:1.4;
+    padding-bottom:100px;
+    min-height:100vh;
+  }
+  .mono{font-family:"SF Mono",SFMono-Regular,Consolas,"Liberation Mono",Menlo,monospace;}
+
+  header{
+    position:sticky;top:0;z-index:20;
+    background:rgba(21,24,28,0.92);
+    backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);
+    padding:14px 16px 10px;
+  }
+  .brand{
+    display:flex;align-items:baseline;justify-content:space-between;
+  }
+  .brand h1{
+    font-size:17px;font-weight:700;letter-spacing:0.02em;margin:0;
+    color:var(--text);
+  }
+  .brand h1 .tick{color:var(--amber);}
+  .brand .count{font-size:12px;color:var(--text-dim);}
+  .mono.count-num{color:var(--amber);font-weight:700;}
+
+  .filterbar{
+    display:flex;gap:6px;margin-top:10px;overflow-x:auto;padding-bottom:2px;
+    scrollbar-width:none;
+  }
+  .filterbar::-webkit-scrollbar{display:none;}
+  .chip{
+    flex:0 0 auto;
+    padding:5px 11px;border-radius:20px;
+    font-size:12.5px;font-weight:600;
+    background:var(--panel-2);color:var(--text-dim);
+    border:1px solid var(--line);
+    white-space:nowrap;
+  }
+  .chip.active{background:var(--amber);color:var(--accent-ink);border-color:var(--amber);}
+  .chip .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:middle;}
+
+  main{padding:14px 12px 0;}
+
+  .section-label{
+    font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;
+    color:var(--text-faint);margin:18px 4px 8px;
+  }
+  .section-label.overdue-label{color:var(--overdue);}
+  .section-label:first-child{margin-top:2px;}
+
+  .proj-group{margin-bottom:6px;}
+  .proj-group-header{
+    display:flex;align-items:center;gap:8px;
+    padding:10px 10px;margin:4px 0;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:10px;
+    cursor:pointer;
+  }
+  .proj-group-header .swatch{width:10px;height:10px;border-radius:50%;flex:0 0 auto;}
+  .proj-group-header .pg-name{font-size:14px;font-weight:700;flex:1;}
+  .proj-group-header .pg-count{font-size:12px;color:var(--text-dim);}
+  .proj-group-header .chev{
+    width:16px;height:16px;color:var(--text-faint);
+    transition:transform 0.15s;
+  }
+  .proj-group-header.collapsed .chev{transform:rotate(-90deg);}
+  .pg-edit-btn{
+    background:none;border:none;color:var(--text-faint);
+    padding:4px;display:flex;align-items:center;flex:0 0 auto;
+  }
+  .pg-edit-btn svg{width:15px;height:15px;}
+  .proj-group-body{overflow:hidden;}
+  .proj-group-body.collapsed{display:none;}
+
+  .task{
+    position:relative;
+    display:flex;align-items:stretch;gap:0;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    margin-bottom:8px;
+    overflow:hidden;
+  }
+  .task.done{opacity:0.5;}
+  .task.backburner{opacity:0.62;}
+  .proj-bar{width:4px;flex:0 0 4px;}
+  .task-body{flex:1;padding:10px 12px;min-width:0;}
+  .task-top{display:flex;align-items:flex-start;gap:10px;}
+  .checkbtn{
+    flex:0 0 auto;width:22px;height:22px;border-radius:6px;
+    border:1.5px solid var(--text-faint);
+    background:transparent;
+    margin-top:1px;
+    display:flex;align-items:center;justify-content:center;
+    color:transparent;
+    padding:0;
+  }
+  .checkbtn.checked{background:var(--done);border-color:var(--done);color:#0e1512;}
+  .checkbtn svg{width:13px;height:13px;}
+
+  .task-main{flex:1;min-width:0;}
+  .task-title{font-size:14.5px;font-weight:600;color:var(--text);word-break:break-word;}
+  .task.done .task-title{text-decoration:line-through;color:var(--text-dim);}
+  .task-meta{display:flex;flex-wrap:wrap;gap:6px 10px;margin-top:4px;font-size:12px;color:var(--text-dim);}
+  .task-meta .m-item{display:flex;align-items:center;gap:3px;}
+  .task-meta .overdue-txt{color:var(--overdue);font-weight:700;}
+  .task-meta .due-today{color:var(--amber);font-weight:700;}
+  .tag{
+    font-size:10.5px;font-weight:700;letter-spacing:0.03em;text-transform:uppercase;
+    padding:1.5px 6px;border-radius:4px;
+  }
+  .tag.blocked{background:#3a2f22;color:#c99a5b;}
+  .tag.backburner{background:#262a2f;color:var(--text-faint);}
+  .tag.recur{background:#20303a;color:#6fa8c9;}
+
+  .score{
+    flex:0 0 auto;
+    text-align:right;
+    padding-left:8px;
+    display:flex;flex-direction:column;align-items:flex-end;justify-content:center;
+    min-width:44px;
+  }
+  .score .num{font-size:15px;font-weight:700;color:var(--amber);}
+  .task.done .score .num{color:var(--text-faint);}
+  .task.backburner .score .num{color:var(--backburner);}
+  .score .num.overdue-num{color:var(--overdue);}
+  .score .lbl{font-size:9px;color:var(--text-faint);letter-spacing:0.05em;text-transform:uppercase;}
+
+  .prereq-row{margin-top:6px;font-size:11.5px;color:var(--text-faint);}
+
+  .swipe-actions{display:flex;flex:0 0 auto;}
+  .sw-btn{
+    width:44px;flex:0 0 44px;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--panel-2);
+    border:none;border-left:1px solid var(--line);
+    color:var(--text-dim);
+  }
+  .sw-btn svg{width:16px;height:16px;}
+  .sw-btn.edit-btn:active{background:#2a2e34;}
+  .sw-btn.del-btn:active{background:#3a2222;color:var(--overdue);}
+
+  .empty-state{
+    text-align:center;padding:60px 20px;color:var(--text-faint);
+  }
+  .empty-state .big{font-size:32px;margin-bottom:10px;}
+  .empty-state .msg{font-size:13.5px;line-height:1.6;}
+
+  .fab{
+    position:fixed;right:18px;bottom:24px;z-index:30;
+    width:56px;height:56px;border-radius:50%;
+    background:var(--amber);color:var(--accent-ink);
+    border:none;box-shadow:0 4px 16px rgba(88,148,224,0.35);
+    display:flex;align-items:center;justify-content:center;
+    padding:0;
+  }
+  .fab svg{width:24px;height:24px;display:block;}
+  .fab:active{transform:scale(0.94);}
+
+  /* Modal */
+  .modal-backdrop{
+    position:fixed;inset:0;background:rgba(10,11,13,0.7);
+    z-index:50;display:none;
+    align-items:flex-end;
+  }
+  .modal-backdrop.open{display:flex;}
+  .modal{
+    background:var(--panel);
+    width:100%;
+    max-height:92vh;
+    border-radius:18px 18px 0 0;
+    border:1px solid var(--line);
+    border-bottom:none;
+    overflow-y:auto;
+    padding:6px 18px 26px;
+    animation:slideup 0.22s ease-out;
+  }
+  @keyframes slideup{from{transform:translateY(24px);opacity:0.6;}to{transform:translateY(0);opacity:1;}}
+  .modal-handle{width:36px;height:4px;background:var(--line);border-radius:3px;margin:10px auto 14px;}
+  .modal h2{font-size:16px;margin:0 0 16px;}
+
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:12px;font-weight:700;color:var(--text-dim);margin-bottom:6px;letter-spacing:0.02em;}
+  .field input[type=text],
+  .field input[type=number],
+  .field input[type=date],
+  .field input[type=time],
+  .field select{
+    width:100%;padding:10px 12px;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:8px;
+    color:var(--text);
+    font-size:15px;
+    font-family:inherit;
+  }
+  .field input:focus,.field select:focus{outline:2px solid var(--focus);outline-offset:1px;}
+  .row2{display:flex;gap:10px;}
+  .row2 > *{flex:1;min-width:0;}
+
+  .dur-row{display:flex;gap:8px;align-items:center;}
+  .dur-row input{width:70px;flex:0 0 70px;}
+  .dur-row .unit-toggle{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex:1;}
+  .dur-row .unit-btn{flex:1;padding:10px 4px;background:var(--panel-2);color:var(--text-dim);font-size:13px;font-weight:600;border:none;}
+  .dur-row .unit-btn.active{background:var(--amber);color:var(--accent-ink);}
+
+  .weight-row{display:flex;align-items:center;gap:10px;}
+  .weight-row input[type=range]{flex:1;accent-color:var(--amber);}
+  .weight-row .wval{width:36px;text-align:right;font-size:13px;color:var(--text-dim);}
+
+  .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;}
+  .toggle-row span{font-size:14px;font-weight:600;}
+  .switch{position:relative;width:44px;height:26px;flex:0 0 44px;}
+  .switch input{opacity:0;width:0;height:0;}
+  .slider-tog{position:absolute;inset:0;background:var(--line);border-radius:26px;transition:0.15s;}
+  .slider-tog:before{content:"";position:absolute;height:20px;width:20px;left:3px;top:3px;background:#c9cdd3;border-radius:50%;transition:0.15s;}
+  input:checked + .slider-tog{background:var(--amber);}
+  input:checked + .slider-tog:before{transform:translateX(18px);background:var(--accent-ink);}
+
+  .proj-select-row{display:flex;flex-wrap:wrap;gap:8px;}
+  .proj-pill{
+    display:flex;align-items:center;gap:6px;
+    padding:7px 12px;border-radius:20px;
+    background:var(--panel-2);border:1.5px solid var(--line);
+    font-size:13px;font-weight:600;color:var(--text-dim);
+  }
+  .proj-pill.selected{border-color:var(--amber);color:var(--text);}
+  .proj-pill .swatch{width:9px;height:9px;border-radius:50%;}
+  .proj-pill.add-new{border-style:dashed;}
+
+  .prereq-list{display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto;}
+  .prereq-item{
+    display:flex;align-items:center;gap:8px;
+    padding:8px 10px;background:var(--panel-2);border-radius:8px;font-size:13.5px;
+  }
+  .prereq-item input{width:16px;height:16px;accent-color:var(--amber);}
+  .prereq-empty{font-size:12.5px;color:var(--text-faint);padding:6px 2px;}
+
+  .modal-actions{display:flex;gap:10px;margin-top:18px;}
+  .btn{
+    flex:1;padding:13px;border-radius:10px;font-size:15px;font-weight:700;border:none;
+  }
+  .btn-primary{background:var(--amber);color:var(--accent-ink);}
+  .btn-primary:active{background:#4879b8;}
+  .btn-secondary{background:var(--panel-2);color:var(--text-dim);border:1px solid var(--line);}
+  .btn-danger{background:transparent;color:var(--overdue);border:1px solid #4a2c24;}
+
+  .recur-panel{background:var(--panel-2);border-radius:10px;padding:12px;margin-top:8px;}
+
+  .weight-settings{
+    position:fixed;inset:0;background:rgba(10,11,13,0.7);z-index:60;display:none;align-items:center;justify-content:center;padding:20px;
+  }
+  .weight-settings.open{display:flex;}
+  .weight-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;width:100%;max-width:360px;}
+  .weight-card h3{margin:0 0 6px;font-size:16px;}
+  .weight-card p{font-size:12.5px;color:var(--text-dim);margin:0 0 16px;line-height:1.5;}
+
+  .icon-btn{background:none;border:none;color:var(--text-dim);padding:6px;display:flex;align-items:center;}
+  .icon-btn svg{width:19px;height:19px;}
+
+  ::-webkit-scrollbar{width:0;height:0;}
+
+  @media (prefers-reduced-motion: reduce){
+    .modal, .fab, .checkbtn{animation:none !important;transition:none !important;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1><span class="tick">▍</span>QUEUE</h1>
+    <div class="count"><span class="mono count-num" id="visibleCount">0</span> shown</div>
+  </div>
+  <div class="filterbar" id="filterBar">
+    <button class="chip active" data-filter="all">All</button>
+    <button class="chip" data-filter="byproject">By project</button>
+    <button class="chip" data-filter="done">Done</button>
+    <button class="icon-btn" id="weightBtn" style="margin-left:auto;flex:0 0 auto;" aria-label="Weight settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 005 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    </button>
+  </div>
+</header>
+
+<main id="mainList"></main>
+
+<div class="empty-state" id="emptyState" style="display:none;">
+  <div class="big">—</div>
+  <div class="msg">Nothing in the queue.<br>Tap + to add a task.</div>
+</div>
+
+<button class="fab" id="fabAdd" aria-label="Add task">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+</button>
+
+<!-- Task edit modal -->
+<div class="modal-backdrop" id="taskModalBackdrop">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2 id="modalTitle">New task</h2>
+
+    <div class="field">
+      <label for="f-title">Task</label>
+      <input type="text" id="f-title" placeholder="What needs doing?" autocomplete="off">
+    </div>
+
+    <div class="field">
+      <label>Project</label>
+      <div class="proj-select-row" id="projSelectRow"></div>
+    </div>
+
+    <div class="toggle-row">
+      <span>No due date</span>
+      <label class="switch">
+        <input type="checkbox" id="f-nodue">
+        <span class="slider-tog"></span>
+      </label>
+    </div>
+
+    <div class="row2" id="dueFieldsRow">
+      <div class="field">
+        <label for="f-date">Due date</label>
+        <input type="date" id="f-date">
+      </div>
+      <div class="field">
+        <label for="f-time">Due time (optional)</label>
+        <input type="time" id="f-time">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Estimated duration</label>
+      <div class="dur-row">
+        <input type="number" id="f-dur" min="1" placeholder="30">
+        <div class="unit-toggle">
+          <button type="button" class="unit-btn active" data-unit="min">min</button>
+          <button type="button" class="unit-btn" data-unit="hr">hr</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="field" id="prereqField" style="display:none;">
+      <label>Prerequisites <span style="font-weight:400;color:var(--text-faint);">(within any project)</span></label>
+      <div class="prereq-list" id="prereqList"></div>
+    </div>
+
+    <div class="toggle-row">
+      <span>Backburner</span>
+      <label class="switch">
+        <input type="checkbox" id="f-backburner">
+        <span class="slider-tog"></span>
+      </label>
+    </div>
+
+    <div class="toggle-row" id="recurToggleRow">
+      <span>Repeats</span>
+      <label class="switch">
+        <input type="checkbox" id="f-recurs">
+        <span class="slider-tog"></span>
+      </label>
+    </div>
+
+    <div class="recur-panel" id="recurPanel" style="display:none;">
+      <div class="field" style="margin-bottom:0;">
+        <label for="f-recur-freq">Frequency</label>
+        <select id="f-recur-freq">
+          <option value="daily">Every day</option>
+          <option value="workdays">Every workday (Mon–Fri)</option>
+          <option value="weekly">Every week</option>
+          <option value="monthly">Every month</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="cancelModalBtn">Cancel</button>
+      <button class="btn btn-primary" id="saveTaskBtn">Save task</button>
+    </div>
+    <div class="modal-actions" id="deleteRow" style="display:none;">
+      <button class="btn btn-danger" id="deleteTaskBtn">Delete task</button>
+    </div>
+  </div>
+</div>
+
+<!-- New project modal -->
+<div class="modal-backdrop" id="projModalBackdrop">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>New project</h2>
+    <div class="field">
+      <label for="p-name">Name</label>
+      <input type="text" id="p-name" placeholder="e.g. CPD manuscript" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>Color</label>
+      <div class="proj-select-row" id="colorSwatches"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="cancelProjBtn">Cancel</button>
+      <button class="btn btn-primary" id="saveProjBtn">Create project</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit / manage existing project modal -->
+<div class="modal-backdrop" id="projEditModalBackdrop">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>Edit project</h2>
+    <div class="field">
+      <label for="pe-name">Name</label>
+      <input type="text" id="pe-name" placeholder="Project name" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>Color</label>
+      <div class="proj-select-row" id="colorSwatchesEdit"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="cancelProjEditBtn">Cancel</button>
+      <button class="btn btn-primary" id="saveProjEditBtn">Save changes</button>
+    </div>
+    <div style="border-top:1px solid var(--line);margin-top:18px;padding-top:16px;">
+      <div class="field" style="margin-bottom:12px;">
+        <label style="color:var(--text-faint);">These actions apply to every task in this project</label>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="completeProjBtn">Mark project completed</button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-danger" id="deleteProjBtn">Delete project &amp; all its tasks</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm dialog for destructive project actions -->
+<div class="modal-backdrop" id="projConfirmBackdrop">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2 id="projConfirmTitle">Are you sure?</h2>
+    <p id="projConfirmBody" style="font-size:13.5px;color:var(--text-dim);line-height:1.5;margin:-8px 0 4px;"></p>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="projConfirmCancelBtn">Cancel</button>
+      <button class="btn btn-danger" id="projConfirmOkBtn">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Weight settings -->
+<div class="weight-settings" id="weightSettings">
+  <div class="weight-card">
+    <h3>Priority weight</h3>
+    <p>Higher weight makes longer tasks rank lower in the queue, regardless of due date. Lower weight makes due dates dominate.</p>
+    <div class="weight-row">
+      <span class="mono" style="font-size:12px;color:var(--text-faint);">0</span>
+      <input type="range" id="weightSlider" min="0" max="2" step="0.05" value="0.5">
+      <span class="mono" style="font-size:12px;color:var(--text-faint);">2</span>
+    </div>
+    <div style="text-align:center;margin-top:4px;">
+      <span class="mono wval" id="weightVal" style="font-size:16px;color:var(--amber);">0.50</span>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="closeWeightBtn">Done</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- Storage ---------- */
+const STORE_KEY = 'queue_tasks_v1';
+const PROJ_KEY = 'queue_projects_v1';
+const WEIGHT_KEY = 'queue_weight_v1';
+
+const PALETTE = ['#5894e0','#FF4242','#FFA500','#00B442','#4169FF','#725CAD','#e0a458','#6fa8c9','#8a7fc7','#7ab88a','#d97a9a','#5fb3a3','#c97a5f','#d9c93e','#4fc3e0'];
+
+function loadTasks(){
+  try{ return JSON.parse(localStorage.getItem(STORE_KEY)) || []; }catch(e){ return []; }
+}
+function saveTasks(t){ localStorage.setItem(STORE_KEY, JSON.stringify(t)); }
+function loadProjects(){
+  try{ return JSON.parse(localStorage.getItem(PROJ_KEY)) || []; }catch(e){ return []; }
+}
+function saveProjects(p){ localStorage.setItem(PROJ_KEY, JSON.stringify(p)); }
+function loadWeight(){
+  const w = parseFloat(localStorage.getItem(WEIGHT_KEY));
+  return isNaN(w) ? 0.5 : w;
+}
+function saveWeight(w){ localStorage.setItem(WEIGHT_KEY, String(w)); }
+
+let tasks = loadTasks();
+let projects = loadProjects();
+let weight = loadWeight();
+let currentFilter = 'all';
+let editingTaskId = null;
+let durUnit = 'min';
+let collapsedProjects = new Set(JSON.parse(localStorage.getItem('queue_collapsed_v1') || '[]'));
+
+function saveCollapsed(){
+  localStorage.setItem('queue_collapsed_v1', JSON.stringify(Array.from(collapsedProjects)));
+}
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+
+/* ---------- Seed a default project on first run ---------- */
+if(projects.length === 0){
+  projects.push({id: uid(), name:'General', color: PALETTE[0]});
+  saveProjects(projects);
+}
+
+/* ---------- Scoring ---------- */
+// score = 1/(days_until_due, floored) + weight * hours
+// overdue tasks: always sort above all non-overdue tasks, ranked by how overdue (more overdue = higher)
+// backburner: ignored time factors, placed in back-middle of the queue
+// undated tasks: gain urgency with age since creation, saturating toward a ceiling
+// equivalent to a task due in ~7 days (1/7 ≈ 0.143), so they can only ever
+// outrank tasks that are comfortably far out, never anything due sooner, and
+// never anything overdue.
+const DAY_MS = 86400000;
+const UNDATED_CEILING = 1/7;   // score ceiling for undated tasks (excludes duration term)
+const UNDATED_HALF_LIFE = 7;   // days for undated urgency to reach half the ceiling
+
+function daysUntil(task){
+  if(!task.dueDate) return null; // no due date
+  const due = new Date(task.dueDate + 'T' + (task.dueTime || '23:59'));
+  const now = new Date();
+  return (due - now) / DAY_MS;
+}
+
+function daysSinceCreated(task){
+  const created = task.createdAt || Date.now();
+  return (Date.now() - created) / DAY_MS;
+}
+
+function computeScore(task){
+  const hrs = (task.durationMin || 0) / 60;
+  const d = daysUntil(task);
+
+  if(d === null){
+    // Undated: saturating curve toward UNDATED_CEILING, never reaching it.
+    const age = Math.max(daysSinceCreated(task), 0);
+    const urgency = UNDATED_CEILING * (age / (age + UNDATED_HALF_LIFE));
+    return urgency + weight * hrs;
+  }
+  if(d < 0){
+    // overdue: score grows the more overdue it is, always > any on-time score band
+    return 10000 + Math.abs(d) * 100;
+  }
+  const denom = Math.max(d, 0.02); // cap near-zero/today to avoid infinity, per spec
+  return (1/denom) + weight * hrs;
+}
+
+function isBlocked(task){
+  if(!task.prereqIds || task.prereqIds.length === 0) return false;
+  return task.prereqIds.some(pid => {
+    const p = tasks.find(t => t.id === pid);
+    return p && !p.done; // if prereq deleted, treat as complete (won't be found -> not blocking)
+  });
+}
+
+/* ---------- Rendering ---------- */
+function fmtDue(task){
+  if(!task.dueDate) return null;
+  const d = daysUntil(task);
+  const dateObj = new Date(task.dueDate + 'T00:00:00');
+  const dateStr = dateObj.toLocaleDateString(undefined, {month:'short', day:'numeric'});
+  if(d < 0) return {text: `Overdue · ${dateStr}`, cls:'overdue-txt'};
+  if(d < 1) return {text: `Today${task.dueTime ? ' · '+fmtTime(task.dueTime) : ''}`, cls:'due-today'};
+  if(d < 2) return {text: `Tomorrow`, cls:''};
+  return {text: dateStr, cls:''};
+}
+function fmtTime(t){
+  const [h,m] = t.split(':').map(Number);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2,'0')}${ampm}`;
+}
+function fmtDur(mins){
+  if(mins < 60) return `${mins}m`;
+  const h = Math.floor(mins/60), m = mins%60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+function projFor(task){
+  return projects.find(p => p.id === task.projectId) || projects[0];
+}
+
+function getVisibleTasks(){
+  let list = tasks.filter(t => {
+    if(currentFilter === 'done') return t.done;
+    return !t.done; // 'all' / 'byproject' show not-done; done tasks live under 'done' tab
+  });
+  // Hide blocked tasks from the queue entirely per spec (only show once prereqs met)
+  if(currentFilter !== 'done'){
+    list = list.filter(t => !isBlocked(t));
+  }
+  return list;
+}
+
+function sortTasks(list){
+  const overdue = [];
+  const normal = [];
+  const backburner = [];
+  list.forEach(t => {
+    if(t.backburner){ backburner.push(t); return; }
+    const d = daysUntil(t);
+    if(d < 0) overdue.push(t); else normal.push(t);
+  });
+  overdue.sort((a,b) => computeScore(b) - computeScore(a));
+  normal.sort((a,b) => computeScore(b) - computeScore(a));
+  backburner.sort((a,b) => computeScore(b) - computeScore(a));
+  return {overdue, normal, backburner};
+}
+
+function render(){
+  const list = getVisibleTasks();
+  const main = document.getElementById('mainList');
+  const empty = document.getElementById('emptyState');
+  main.innerHTML = '';
+
+  document.getElementById('visibleCount').textContent = list.length;
+
+  if(list.length === 0){
+    empty.style.display = 'block';
+    main.style.display = 'none';
+    return;
+  }
+  empty.style.display = 'none';
+  main.style.display = 'block';
+
+  if(currentFilter === 'done'){
+    list.sort((a,b) => (b.completedAt||0) - (a.completedAt||0));
+    main.appendChild(renderGroup(list, null));
+    return;
+  }
+
+  if(currentFilter === 'byproject'){
+    renderByProject(list, main);
+    return;
+  }
+
+  const {overdue, normal, backburner} = sortTasks(list);
+
+  if(overdue.length){
+    main.appendChild(sectionLabel('Overdue', true));
+    main.appendChild(renderGroup(overdue));
+  }
+  if(normal.length){
+    if(overdue.length) main.appendChild(sectionLabel('Up next', false));
+    main.appendChild(renderGroup(normal));
+  }
+  if(backburner.length){
+    main.appendChild(sectionLabel('Backburner', false));
+    main.appendChild(renderGroup(backburner));
+  }
+}
+
+function sectionLabel(text, isOverdue){
+  const div = document.createElement('div');
+  div.className = 'section-label' + (isOverdue ? ' overdue-label' : '');
+  div.textContent = text;
+  return div;
+}
+
+function renderGroup(list){
+  const frag = document.createDocumentFragment();
+  list.forEach(t => frag.appendChild(renderTask(t)));
+  const wrap = document.createElement('div');
+  wrap.appendChild(frag);
+  return wrap;
+}
+
+function renderByProject(list, main){
+  // Group by project, sort each group's tasks by the same priority score
+  // (overdue > normal > backburner within each group), render as collapsible cards.
+  // Projects with zero open tasks still render (empty state) so they remain manageable.
+  projects.forEach(proj => {
+    const projTasks = list.filter(t => t.projectId === proj.id);
+
+    const {overdue, normal, backburner} = sortTasks(projTasks);
+    const ordered = [...overdue, ...normal, ...backburner];
+
+    const groupEl = document.createElement('div');
+    groupEl.className = 'proj-group';
+
+    const isCollapsed = collapsedProjects.has(proj.id);
+
+    const header = document.createElement('div');
+    header.className = 'proj-group-header' + (isCollapsed ? ' collapsed' : '');
+    header.innerHTML = `
+      <span class="swatch" style="background:${proj.color}"></span>
+      <span class="pg-name">${proj.name}</span>
+      <span class="pg-count mono">${ordered.length}</span>
+      <button type="button" class="pg-edit-btn" aria-label="Edit project" data-proj-id="${proj.id}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 005 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      </button>
+      <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+    `;
+
+    const body = document.createElement('div');
+    body.className = 'proj-group-body' + (isCollapsed ? ' collapsed' : '');
+
+    if(overdue.length){
+      body.appendChild(sectionLabel('Overdue', true));
+      body.appendChild(renderGroup(overdue));
+    }
+    if(normal.length){
+      if(overdue.length) body.appendChild(sectionLabel('Up next', false));
+      body.appendChild(renderGroup(normal));
+    }
+    if(backburner.length){
+      body.appendChild(sectionLabel('Backburner', false));
+      body.appendChild(renderGroup(backburner));
+    }
+    if(ordered.length === 0){
+      const emptyMsg = document.createElement('div');
+      emptyMsg.className = 'prereq-empty';
+      emptyMsg.style.padding = '4px 8px 10px';
+      emptyMsg.textContent = 'No open tasks in this project.';
+      body.appendChild(emptyMsg);
+    }
+
+    header.addEventListener('click', (e) => {
+      if(e.target.closest('.pg-edit-btn')) return; // handled separately, don't toggle collapse
+      const nowCollapsed = !collapsedProjects.has(proj.id);
+      if(nowCollapsed) collapsedProjects.add(proj.id); else collapsedProjects.delete(proj.id);
+      saveCollapsed();
+      header.classList.toggle('collapsed', nowCollapsed);
+      body.classList.toggle('collapsed', nowCollapsed);
+    });
+
+    header.querySelector('.pg-edit-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openProjEditModal(proj.id);
+    });
+
+    groupEl.appendChild(header);
+    groupEl.appendChild(body);
+    main.appendChild(groupEl);
+  });
+}
+
+function renderTask(t){
+  const proj = projFor(t);
+  const due = fmtDue(t);
+  const score = computeScore(t);
+  const d = daysUntil(t);
+
+  const el = document.createElement('div');
+  el.className = 'task' + (t.done ? ' done' : '') + (t.backburner ? ' backburner' : '');
+
+  const bar = document.createElement('div');
+  bar.className = 'proj-bar';
+  bar.style.background = proj ? proj.color : 'transparent';
+  el.appendChild(bar);
+
+  const body = document.createElement('div');
+  body.className = 'task-body';
+
+  const top = document.createElement('div');
+  top.className = 'task-top';
+
+  const check = document.createElement('button');
+  check.className = 'checkbtn' + (t.done ? ' checked' : '');
+  check.innerHTML = t.done ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>' : '';
+  check.addEventListener('click', (e) => { e.stopPropagation(); toggleDone(t.id); });
+  top.appendChild(check);
+
+  const mainCol = document.createElement('div');
+  mainCol.className = 'task-main';
+
+  const title = document.createElement('div');
+  title.className = 'task-title';
+  title.textContent = t.title;
+  mainCol.appendChild(title);
+
+  const meta = document.createElement('div');
+  meta.className = 'task-meta';
+
+  if(proj){
+    const pTag = document.createElement('span');
+    pTag.className = 'm-item';
+    pTag.style.color = proj.color;
+    pTag.textContent = proj.name;
+    meta.appendChild(pTag);
+  }
+  if(due){
+    const dEl = document.createElement('span');
+    dEl.className = 'm-item ' + due.cls;
+    dEl.textContent = due.text;
+    meta.appendChild(dEl);
+  } else {
+    const dEl = document.createElement('span');
+    dEl.className = 'm-item';
+    dEl.style.color = 'var(--text-faint)';
+    dEl.textContent = 'No due date';
+    meta.appendChild(dEl);
+  }
+  const durEl = document.createElement('span');
+  durEl.className = 'm-item';
+  durEl.textContent = fmtDur(t.durationMin || 0);
+  meta.appendChild(durEl);
+
+  if(t.recurs){
+    const rTag = document.createElement('span');
+    rTag.className = 'tag recur';
+    rTag.textContent = t.recurFreq === 'workdays' ? 'Workdays' : t.recurFreq;
+    meta.appendChild(rTag);
+  }
+  if(t.backburner){
+    const bTag = document.createElement('span');
+    bTag.className = 'tag backburner';
+    bTag.textContent = 'Backburner';
+    meta.appendChild(bTag);
+  }
+
+  mainCol.appendChild(meta);
+  top.appendChild(mainCol);
+
+  const scoreCol = document.createElement('div');
+  scoreCol.className = 'score';
+  const numEl = document.createElement('div');
+  numEl.className = 'num mono' + (d < 0 ? ' overdue-num' : '');
+  numEl.textContent = t.backburner ? '·' : score.toFixed(1);
+  scoreCol.appendChild(numEl);
+  const lblEl = document.createElement('div');
+  lblEl.className = 'lbl';
+  lblEl.textContent = t.done ? 'done' : (t.backburner ? 'later' : 'score');
+  scoreCol.appendChild(lblEl);
+  top.appendChild(scoreCol);
+
+  body.appendChild(top);
+  el.appendChild(body);
+
+  const actions = document.createElement('div');
+  actions.className = 'swipe-actions';
+  const editBtn = document.createElement('button');
+  editBtn.className = 'sw-btn edit-btn';
+  editBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+  editBtn.addEventListener('click', () => openEditModal(t.id));
+  actions.appendChild(editBtn);
+  el.appendChild(actions);
+
+  return el;
+}
+
+function toggleDone(id){
+  const t = tasks.find(x => x.id === id);
+  if(!t) return;
+  t.done = !t.done;
+  t.completedAt = t.done ? Date.now() : null;
+  if(t.done && t.recurs){
+    spawnNextRecurrence(t);
+  }
+  saveTasks(tasks);
+  render();
+}
+
+function spawnNextRecurrence(t){
+  const next = {
+    ...t,
+    id: uid(),
+    done: false,
+    completedAt: null,
+    prereqIds: [], // independent prerequisites per spec
+    dueDate: nextRecurDate(t.dueDate, t.recurFreq)
+  };
+  tasks.push(next);
+}
+
+function nextRecurDate(dateStr, freq){
+  const d = new Date((dateStr || new Date().toISOString().slice(0,10)) + 'T00:00:00');
+  if(freq === 'daily'){
+    d.setDate(d.getDate() + 1);
+  } else if(freq === 'workdays'){
+    do { d.setDate(d.getDate() + 1); } while(d.getDay() === 0 || d.getDay() === 6);
+  } else if(freq === 'weekly'){
+    d.setDate(d.getDate() + 7);
+  } else if(freq === 'monthly'){
+    d.setMonth(d.getMonth() + 1);
+  }
+  return d.toISOString().slice(0,10);
+}
+
+/* ---------- Filter bar ---------- */
+document.getElementById('filterBar').addEventListener('click', (e) => {
+  const chip = e.target.closest('.chip');
+  if(!chip) return;
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  chip.classList.add('active');
+  currentFilter = chip.dataset.filter;
+  render();
+});
+
+/* ---------- Task Modal ---------- */
+const taskModalBackdrop = document.getElementById('taskModalBackdrop');
+const fabAdd = document.getElementById('fabAdd');
+
+function openAddModal(){
+  editingTaskId = null;
+  document.getElementById('modalTitle').textContent = 'New task';
+  document.getElementById('f-title').value = '';
+  document.getElementById('f-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('f-time').value = '';
+  document.getElementById('f-nodue').checked = false;
+  document.getElementById('dueFieldsRow').style.display = 'flex';
+  document.getElementById('f-dur').value = '';
+  durUnit = 'min';
+  document.querySelectorAll('.unit-btn').forEach(b => b.classList.toggle('active', b.dataset.unit === 'min'));
+  document.getElementById('f-backburner').checked = false;
+  document.getElementById('f-recurs').checked = false;
+  document.getElementById('recurPanel').style.display = 'none';
+  document.getElementById('f-recur-freq').value = 'weekly';
+  document.getElementById('deleteRow').style.display = 'none';
+  renderProjSelect(projects[0].id);
+  renderPrereqList(null, projects[0].id);
+  taskModalBackdrop.classList.add('open');
+}
+
+function openEditModal(id){
+  const t = tasks.find(x => x.id === id);
+  if(!t) return;
+  editingTaskId = id;
+  document.getElementById('modalTitle').textContent = 'Edit task';
+  document.getElementById('f-title').value = t.title;
+  document.getElementById('f-date').value = t.dueDate || new Date().toISOString().slice(0,10);
+  document.getElementById('f-time').value = t.dueTime || '';
+  document.getElementById('f-nodue').checked = !t.dueDate;
+  document.getElementById('dueFieldsRow').style.display = t.dueDate ? 'flex' : 'none';
+  document.getElementById('recurToggleRow').style.display = t.dueDate ? 'flex' : 'none';
+  if(t.durationMin >= 60 && t.durationMin % 60 === 0){
+    durUnit = 'hr';
+    document.getElementById('f-dur').value = t.durationMin / 60;
+  } else {
+    durUnit = 'min';
+    document.getElementById('f-dur').value = t.durationMin;
+  }
+  document.querySelectorAll('.unit-btn').forEach(b => b.classList.toggle('active', b.dataset.unit === durUnit));
+  document.getElementById('f-backburner').checked = !!t.backburner;
+  document.getElementById('f-recurs').checked = !!t.recurs;
+  document.getElementById('recurPanel').style.display = t.recurs ? 'block' : 'none';
+  document.getElementById('f-recur-freq').value = t.recurFreq || 'weekly';
+  document.getElementById('deleteRow').style.display = 'flex';
+  renderProjSelect(t.projectId);
+  renderPrereqList(t.id, t.projectId, t.prereqIds || []);
+  taskModalBackdrop.classList.add('open');
+}
+
+function closeTaskModal(){ taskModalBackdrop.classList.remove('open'); }
+
+document.getElementById('fabAdd').addEventListener('click', openAddModal);
+document.getElementById('cancelModalBtn').addEventListener('click', closeTaskModal);
+
+document.querySelectorAll('.unit-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.unit-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    durUnit = btn.dataset.unit;
+  });
+});
+
+document.getElementById('f-recurs').addEventListener('change', (e) => {
+  document.getElementById('recurPanel').style.display = e.target.checked ? 'block' : 'none';
+});
+
+document.getElementById('f-nodue').addEventListener('change', (e) => {
+  const noDue = e.target.checked;
+  document.getElementById('dueFieldsRow').style.display = noDue ? 'none' : 'flex';
+  document.getElementById('recurToggleRow').style.display = noDue ? 'none' : 'flex';
+  if(noDue){
+    document.getElementById('f-recurs').checked = false;
+    document.getElementById('recurPanel').style.display = 'none';
+  }
+});
+
+function renderProjSelect(selectedId){
+  const row = document.getElementById('projSelectRow');
+  row.innerHTML = '';
+  projects.forEach(p => {
+    const pill = document.createElement('button');
+    pill.type = 'button';
+    pill.className = 'proj-pill' + (p.id === selectedId ? ' selected' : '');
+    pill.dataset.projId = p.id;
+    pill.innerHTML = `<span class="swatch" style="background:${p.color}"></span>${p.name}`;
+    pill.addEventListener('click', () => {
+      row.querySelectorAll('.proj-pill').forEach(x => x.classList.remove('selected'));
+      pill.classList.add('selected');
+      renderPrereqList(editingTaskId, p.id, editingTaskId ? (tasks.find(t=>t.id===editingTaskId)?.prereqIds||[]) : []);
+    });
+    row.appendChild(pill);
+  });
+  const addPill = document.createElement('button');
+  addPill.type = 'button';
+  addPill.className = 'proj-pill add-new';
+  addPill.textContent = '+ New';
+  addPill.addEventListener('click', openProjModal);
+  row.appendChild(addPill);
+}
+
+function getSelectedProjId(){
+  const sel = document.querySelector('#projSelectRow .proj-pill.selected');
+  return sel ? sel.dataset.projId : projects[0].id;
+}
+
+function renderPrereqList(currentTaskId, projectId, checkedIds){
+  const field = document.getElementById('prereqField');
+  const list = document.getElementById('prereqList');
+  list.innerHTML = '';
+  const candidates = tasks.filter(t => t.projectId === projectId && t.id !== currentTaskId && !t.done);
+  if(candidates.length === 0){
+    field.style.display = 'block';
+    list.innerHTML = '<div class="prereq-empty">No other open tasks in this project yet.</div>';
+    return;
+  }
+  field.style.display = 'block';
+  candidates.forEach(c => {
+    const row = document.createElement('label');
+    row.className = 'prereq-item';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = c.id;
+    cb.checked = (checkedIds || []).includes(c.id);
+    row.appendChild(cb);
+    const span = document.createElement('span');
+    span.textContent = c.title;
+    row.appendChild(span);
+    list.appendChild(row);
+  });
+}
+
+document.getElementById('saveTaskBtn').addEventListener('click', () => {
+  const title = document.getElementById('f-title').value.trim();
+  if(!title){ document.getElementById('f-title').focus(); return; }
+  const noDue = document.getElementById('f-nodue').checked;
+  const dueDate = noDue ? null : (document.getElementById('f-date').value || null);
+  const dueTime = noDue ? null : (document.getElementById('f-time').value || null);
+  let durRaw = parseFloat(document.getElementById('f-dur').value) || 0;
+  const durationMin = durUnit === 'hr' ? Math.round(durRaw * 60) : Math.round(durRaw);
+  const projectId = getSelectedProjId();
+  const backburner = document.getElementById('f-backburner').checked;
+  const recurs = document.getElementById('f-recurs').checked && !!dueDate;
+  const recurFreq = document.getElementById('f-recur-freq').value;
+  const prereqIds = Array.from(document.querySelectorAll('#prereqList input:checked')).map(cb => cb.value);
+
+  if(editingTaskId){
+    const t = tasks.find(x => x.id === editingTaskId);
+    Object.assign(t, {title, dueDate, dueTime, durationMin, projectId, backburner, recurs, recurFreq, prereqIds});
+  } else {
+    tasks.push({
+      id: uid(), title, dueDate, dueTime, durationMin, projectId,
+      backburner, recurs, recurFreq, prereqIds,
+      done:false, completedAt:null, createdAt: Date.now()
+    });
+  }
+  saveTasks(tasks);
+  closeTaskModal();
+  render();
+});
+
+document.getElementById('deleteTaskBtn').addEventListener('click', () => {
+  if(!editingTaskId) return;
+  // Deleted task treated as complete so it stops blocking dependents (per spec).
+  tasks = tasks.filter(t => t.id !== editingTaskId);
+  saveTasks(tasks);
+  closeTaskModal();
+  render();
+});
+
+/* ---------- Project Modal ---------- */
+const projModalBackdrop = document.getElementById('projModalBackdrop');
+
+function renderColorSwatches(containerId, chosen, onPick){
+  const sw = document.getElementById(containerId);
+  sw.innerHTML = '';
+  PALETTE.forEach(c => {
+    const dot = document.createElement('button');
+    dot.type = 'button';
+    dot.className = 'proj-pill' + (c === chosen ? ' selected' : '');
+    dot.style.padding = '10px';
+    dot.dataset.color = c;
+    dot.innerHTML = `<span class="swatch" style="background:${c};width:16px;height:16px;"></span>`;
+    dot.addEventListener('click', () => {
+      sw.querySelectorAll('.proj-pill').forEach(x => x.classList.remove('selected'));
+      dot.classList.add('selected');
+      if(onPick) onPick(c);
+    });
+    sw.appendChild(dot);
+  });
+}
+
+function openProjModal(){
+  document.getElementById('p-name').value = '';
+  const chosen = PALETTE[projects.length % PALETTE.length];
+  renderColorSwatches('colorSwatches', chosen);
+  projModalBackdrop.classList.add('open');
+  setTimeout(() => document.getElementById('p-name').focus(), 100);
+}
+
+document.getElementById('cancelProjBtn').addEventListener('click', () => projModalBackdrop.classList.remove('open'));
+
+document.getElementById('saveProjBtn').addEventListener('click', () => {
+  const name = document.getElementById('p-name').value.trim();
+  if(!name) return;
+  const colorBtn = document.querySelector('#colorSwatches .proj-pill.selected');
+  const color = colorBtn ? colorBtn.dataset.color : PALETTE[0];
+  const newProj = {id: uid(), name, color};
+  projects.push(newProj);
+  saveProjects(projects);
+  projModalBackdrop.classList.remove('open');
+  renderProjSelect(newProj.id);
+});
+
+/* ---------- Edit / manage existing project ---------- */
+const projEditModalBackdrop = document.getElementById('projEditModalBackdrop');
+let editingProjId = null;
+
+function openProjEditModal(projId){
+  const proj = projects.find(p => p.id === projId);
+  if(!proj) return;
+  editingProjId = projId;
+  document.getElementById('pe-name').value = proj.name;
+  renderColorSwatches('colorSwatchesEdit', proj.color);
+  projEditModalBackdrop.classList.add('open');
+}
+
+document.getElementById('cancelProjEditBtn').addEventListener('click', () => {
+  projEditModalBackdrop.classList.remove('open');
+});
+
+document.getElementById('saveProjEditBtn').addEventListener('click', () => {
+  const proj = projects.find(p => p.id === editingProjId);
+  if(!proj) return;
+  const name = document.getElementById('pe-name').value.trim();
+  if(!name) return;
+  const colorBtn = document.querySelector('#colorSwatchesEdit .proj-pill.selected');
+  proj.name = name;
+  proj.color = colorBtn ? colorBtn.dataset.color : proj.color;
+  saveProjects(projects);
+  projEditModalBackdrop.classList.remove('open');
+  render();
+});
+
+/* ---------- Confirm dialog (shared for destructive project actions) ---------- */
+const projConfirmBackdrop = document.getElementById('projConfirmBackdrop');
+let pendingConfirmAction = null;
+
+function askProjectConfirm(title, body, onConfirm){
+  document.getElementById('projConfirmTitle').textContent = title;
+  document.getElementById('projConfirmBody').textContent = body;
+  pendingConfirmAction = onConfirm;
+  projConfirmBackdrop.classList.add('open');
+}
+
+document.getElementById('projConfirmCancelBtn').addEventListener('click', () => {
+  pendingConfirmAction = null;
+  projConfirmBackdrop.classList.remove('open');
+});
+
+document.getElementById('projConfirmOkBtn').addEventListener('click', () => {
+  if(pendingConfirmAction) pendingConfirmAction();
+  pendingConfirmAction = null;
+  projConfirmBackdrop.classList.remove('open');
+});
+
+document.getElementById('completeProjBtn').addEventListener('click', () => {
+  const proj = projects.find(p => p.id === editingProjId);
+  if(!proj) return;
+  askProjectConfirm(
+    'Mark project completed?',
+    `Every task in "${proj.name}" will be marked done. The project will be removed from your project list, but completed tasks remain visible under the Done tab.`,
+    () => {
+      const now = Date.now();
+      tasks.forEach(t => {
+        if(t.projectId === proj.id && !t.done){
+          t.done = true;
+          t.completedAt = now;
+        }
+      });
+      projects = projects.filter(p => p.id !== proj.id);
+      saveTasks(tasks);
+      saveProjects(projects);
+      projEditModalBackdrop.classList.remove('open');
+      render();
+    }
+  );
+});
+
+document.getElementById('deleteProjBtn').addEventListener('click', () => {
+  const proj = projects.find(p => p.id === editingProjId);
+  if(!proj) return;
+  askProjectConfirm(
+    'Delete project and all its tasks?',
+    `"${proj.name}" and every task inside it will be permanently deleted. This can't be undone. Tasks in other projects that depend on these as prerequisites will be unblocked, the same as deleting a single task.`,
+    () => {
+      // Deleting a project removes its tasks outright; per existing spec, a
+      // deleted task is treated as complete, so it no longer blocks any
+      // cross-project dependents (isBlocked only checks tasks that still exist).
+      tasks = tasks.filter(t => t.projectId !== proj.id);
+      projects = projects.filter(p => p.id !== proj.id);
+      saveTasks(tasks);
+      saveProjects(projects);
+      projEditModalBackdrop.classList.remove('open');
+      render();
+    }
+  );
+});
+
+/* ---------- Weight Settings ---------- */
+const weightSettings = document.getElementById('weightSettings');
+const weightSlider = document.getElementById('weightSlider');
+const weightVal = document.getElementById('weightVal');
+
+document.getElementById('weightBtn').addEventListener('click', () => {
+  weightSlider.value = weight;
+  weightVal.textContent = weight.toFixed(2);
+  weightSettings.classList.add('open');
+});
+weightSlider.addEventListener('input', () => {
+  weight = parseFloat(weightSlider.value);
+  weightVal.textContent = weight.toFixed(2);
+});
+document.getElementById('closeWeightBtn').addEventListener('click', () => {
+  saveWeight(weight);
+  weightSettings.classList.remove('open');
+  render();
+});
+
+/* ---------- Close modals on backdrop tap ---------- */
+[taskModalBackdrop, projModalBackdrop, projEditModalBackdrop, projConfirmBackdrop, weightSettings].forEach(bd => {
+  bd.addEventListener('click', (e) => { if(e.target === bd) bd.classList.remove('open'); });
+});
+
+/* ---------- Init ---------- */
+render();
+
+/* ---------- Service worker registration ---------- */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
