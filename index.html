@@ -118,11 +118,13 @@
     position:relative;
     display:flex;align-items:stretch;gap:0;
     background:var(--panel);
-    border:1px solid var(--line);
+    border:3px solid var(--line);
     border-radius:10px;
     margin-bottom:8px;
     overflow:hidden;
   }
+  .urgency-meter{width:100%;height:4px;background:var(--panel-2);border-radius:2px;overflow:hidden;margin-top:7px;}
+  .urgency-meter-fill{height:100%;border-radius:2px;}
   .task.done{opacity:0.5;}
   .task.backburner{opacity:0.62;}
   .proj-bar{width:4px;flex:0 0 4px;}
@@ -220,10 +222,10 @@
     animation:slideup 0.22s ease-out;
   }
   @keyframes slideup{from{transform:translateY(24px);opacity:0.6;}to{transform:translateY(0);opacity:1;}}
+  .modal-header{touch-action:none;cursor:grab;}
   .modal-handle{
     width:64px;height:26px;margin:2px auto 6px;
     display:flex;align-items:center;justify-content:center;
-    touch-action:none;cursor:grab;
   }
   .modal-handle::after{content:"";width:36px;height:4px;background:var(--line);border-radius:3px;}
   .modal h2{font-size:16px;margin:0 0 16px;}
@@ -302,7 +304,7 @@
   .proj-dropdown-item.selected{color:var(--text);}
   .proj-dropdown-item .swatch{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}
 
-  .prereq-list{display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto;}
+  .prereq-list{display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto;margin-top:8px;}
   .prereq-item{
     display:flex;align-items:center;gap:8px;
     padding:8px 10px;background:var(--panel-2);border-radius:8px;font-size:13.5px;
@@ -325,9 +327,13 @@
     position:fixed;inset:0;background:rgba(10,11,13,0.7);z-index:60;display:none;align-items:center;justify-content:center;padding:20px;
   }
   .weight-settings.open{display:flex;}
-  .weight-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;width:100%;max-width:360px;}
+  .weight-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;width:100%;max-width:360px;max-height:86vh;overflow-y:auto;}
   .weight-card h3{margin:0 0 6px;font-size:16px;}
   .weight-card p{font-size:12.5px;color:var(--text-dim);margin:0 0 16px;line-height:1.5;}
+  .param-block{margin-bottom:20px;}
+  .param-block h4{margin:0 0 4px;font-size:13px;font-weight:700;}
+  .param-block p{font-size:12px;color:var(--text-dim);margin:0 0 10px;line-height:1.45;}
+  .param-block:last-of-type{margin-bottom:0;}
 
   .icon-btn{background:none;border:none;color:var(--text-dim);padding:6px;display:flex;align-items:center;}
   .icon-btn svg{width:19px;height:19px;}
@@ -350,7 +356,7 @@
     <button class="chip active" data-filter="all">All</button>
     <button class="chip" data-filter="byproject">By project</button>
     <button class="chip" data-filter="done">Done</button>
-    <button class="icon-btn" id="weightBtn" style="margin-left:auto;flex:0 0 auto;" aria-label="Weight settings">
+    <button class="icon-btn" id="weightBtn" style="margin-left:auto;flex:0 0 auto;" aria-label="Priority settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 005 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
     </button>
   </div>
@@ -370,8 +376,10 @@
 <!-- Task edit modal -->
 <div class="modal-backdrop" id="taskModalBackdrop">
   <div class="modal">
-    <div class="modal-handle"></div>
-    <h2 id="modalTitle">New task</h2>
+    <div class="modal-header">
+      <div class="modal-handle"></div>
+      <h2 id="modalTitle">New task</h2>
+    </div>
 
     <div class="field">
       <label for="f-title">Task</label>
@@ -422,9 +430,18 @@
       </div>
     </div>
 
+    <div class="field">
+      <label for="f-startdate">Don't show until (optional)</label>
+      <input type="date" id="f-startdate">
+    </div>
+
     <div class="field" id="prereqField" style="display:none;">
       <label>Prerequisites</label>
-      <div class="prereq-list" id="prereqList"></div>
+      <button type="button" class="proj-dropdown-btn" id="prereqDropdownBtn">
+        <span class="proj-dropdown-label" id="prereqDropdownLabel">None selected</span>
+        <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="prereq-list" id="prereqList" style="display:none;"></div>
     </div>
 
     <div class="field">
@@ -473,8 +490,10 @@
 <!-- New project modal -->
 <div class="modal-backdrop" id="projModalBackdrop">
   <div class="modal">
-    <div class="modal-handle"></div>
-    <h2>New project</h2>
+    <div class="modal-header">
+      <div class="modal-handle"></div>
+      <h2>New project</h2>
+    </div>
     <div class="field">
       <label for="p-name">Name</label>
       <input type="text" id="p-name" placeholder="e.g. CPD manuscript" autocomplete="off">
@@ -493,8 +512,10 @@
 <!-- Edit / manage existing project modal -->
 <div class="modal-backdrop" id="projEditModalBackdrop">
   <div class="modal">
-    <div class="modal-handle"></div>
-    <h2>Edit project</h2>
+    <div class="modal-header">
+      <div class="modal-handle"></div>
+      <h2>Edit project</h2>
+    </div>
     <div class="field">
       <label for="pe-name">Name</label>
       <input type="text" id="pe-name" placeholder="Project name" autocomplete="off">
@@ -524,8 +545,10 @@
 <!-- Confirm dialog for destructive project actions -->
 <div class="modal-backdrop" id="projConfirmBackdrop">
   <div class="modal">
-    <div class="modal-handle"></div>
-    <h2 id="projConfirmTitle">Are you sure?</h2>
+    <div class="modal-header">
+      <div class="modal-handle"></div>
+      <h2 id="projConfirmTitle">Are you sure?</h2>
+    </div>
     <p id="projConfirmBody" style="font-size:13.5px;color:var(--text-dim);line-height:1.5;margin:-8px 0 4px;"></p>
     <div class="modal-actions">
       <button class="btn btn-secondary" id="projConfirmCancelBtn">Cancel</button>
@@ -534,19 +557,77 @@
   </div>
 </div>
 
-<!-- Weight settings -->
+<!-- Priority settings -->
 <div class="weight-settings" id="weightSettings">
   <div class="weight-card">
-    <h3>Priority weight</h3>
-    <p>Higher weight makes shorter tasks rank higher in the queue, regardless of due date. Lower weight makes due dates dominate.</p>
-    <div class="weight-row">
-      <span class="mono" style="font-size:12px;color:var(--text-faint);">0</span>
-      <input type="range" id="weightSlider" min="0" max="2" step="0.05" value="0.5">
-      <span class="mono" style="font-size:12px;color:var(--text-faint);">2</span>
+    <h3>Priority settings</h3>
+    <p>Tune how the queue's score is computed. Changes apply immediately and are saved on this device.</p>
+
+    <div class="param-block">
+      <h4>Duration weight</h4>
+      <p>How many days of delay one hour of a task's duration is worth. Higher makes shorter tasks rank higher regardless of due date; 0 makes duration irrelevant.</p>
+      <div class="weight-row">
+        <span class="mono" style="font-size:12px;color:var(--text-faint);">0</span>
+        <input type="range" id="weightSlider" min="0" max="2" step="0.05" value="0.5">
+        <span class="mono" style="font-size:12px;color:var(--text-faint);">2</span>
+      </div>
+      <div style="text-align:center;margin-top:4px;">
+        <span class="mono wval" id="weightVal" style="font-size:16px;color:var(--amber);">0.50</span>
+      </div>
     </div>
-    <div style="text-align:center;margin-top:4px;">
-      <span class="mono wval" id="weightVal" style="font-size:16px;color:var(--amber);">0.50</span>
+
+    <div class="param-block">
+      <h4>Urgency timescale (days)</h4>
+      <p>How many days out a due date needs to be before it stops feeling urgent, and how many days overdue before an overdue task's urgency maxes out. Lower makes the queue react more sharply to due dates.</p>
+      <div class="weight-row">
+        <span class="mono" style="font-size:12px;color:var(--text-faint);">1</span>
+        <input type="range" id="tauSlider" min="1" max="14" step="0.5" value="5">
+        <span class="mono" style="font-size:12px;color:var(--text-faint);">14</span>
+      </div>
+      <div style="text-align:center;margin-top:4px;">
+        <span class="mono wval" id="tauVal" style="font-size:16px;color:var(--amber);">5.0</span>
+      </div>
     </div>
+
+    <div class="param-block">
+      <h4>Overdue cap</h4>
+      <p>The extra headroom overdue tasks get above the maximum on-time score, so an overdue task always outranks any on-time one. Doesn't change the ordering, just how visually "hot" very overdue tasks look.</p>
+      <div class="weight-row">
+        <span class="mono" style="font-size:12px;color:var(--text-faint);">0</span>
+        <input type="range" id="overdueCapSlider" min="0" max="100" step="5" value="50">
+        <span class="mono" style="font-size:12px;color:var(--text-faint);">100</span>
+      </div>
+      <div style="text-align:center;margin-top:4px;">
+        <span class="mono wval" id="overdueCapVal" style="font-size:16px;color:var(--amber);">50</span>
+      </div>
+    </div>
+
+    <div class="param-block">
+      <h4>Undated grace period (days)</h4>
+      <p>How many days an undated task is treated as having before it's as urgent as something due today. Older undated tasks keep climbing toward this, but never become "overdue."</p>
+      <div class="weight-row">
+        <span class="mono" style="font-size:12px;color:var(--text-faint);">1</span>
+        <input type="range" id="undatedGraceSlider" min="1" max="30" step="1" value="7">
+        <span class="mono" style="font-size:12px;color:var(--text-faint);">30</span>
+      </div>
+      <div style="text-align:center;margin-top:4px;">
+        <span class="mono wval" id="undatedGraceVal" style="font-size:16px;color:var(--amber);">7</span>
+      </div>
+    </div>
+
+    <div class="param-block">
+      <h4>Undated accrual rate</h4>
+      <p>How fast an undated task's urgency grows from aging, relative to a dated task counting down to its due date. 0.5 means undated tasks age into urgency at half the rate — a 2:1 ratio.</p>
+      <div class="weight-row">
+        <span class="mono" style="font-size:12px;color:var(--text-faint);">0</span>
+        <input type="range" id="undatedRateSlider" min="0" max="1" step="0.05" value="0.5">
+        <span class="mono" style="font-size:12px;color:var(--text-faint);">1</span>
+      </div>
+      <div style="text-align:center;margin-top:4px;">
+        <span class="mono wval" id="undatedRateVal" style="font-size:16px;color:var(--amber);">0.50</span>
+      </div>
+    </div>
+
     <div class="modal-actions">
       <button class="btn btn-primary" id="closeWeightBtn">Done</button>
     </div>
@@ -574,6 +655,12 @@ function loadWeight(){
   return isNaN(w) ? 0.5 : w;
 }
 function saveWeight(w){ localStorage.setItem(WEIGHT_KEY, String(w)); }
+const PARAM_KEY_PREFIX = 'queue_param_v1_';
+function loadParam(name, fallback){
+  const v = parseFloat(localStorage.getItem(PARAM_KEY_PREFIX + name));
+  return isNaN(v) ? fallback : v;
+}
+function saveParam(name, v){ localStorage.setItem(PARAM_KEY_PREFIX + name, String(v)); }
 
 let tasks = loadTasks();
 let projects = loadProjects();
@@ -596,23 +683,26 @@ if(projects.length === 0){
 }
 
 /* ---------- Scoring ---------- */
-// Urgency is a 0-100 exponential decay on days-until-due (due today = 100,
-// each TAU_DUE days out roughly a third of the previous value), which spreads
-// tasks out over the usual multi-week planning horizon instead of bunching
-// them all near one value. Duration is a saturating penalty (bounded by
-// DURATION_SCALE * weight) rather than an unbounded subtraction, so scores
-// can't run away negative. Overdue tasks always outrank on-time ones, on
-// their own 100-150 band, growing with how overdue they are; duration doesn't
-// affect overdue tasks, only how late they are. Backburner tasks ignore all
-// of this and sit in their own back-middle bucket regardless of score.
+// Single exponential curve drives everything, via one unified quantity:
+// "effective days until due" (effD). Dated tasks use their real due date.
+// Undated tasks get a virtual due date (UNDATED_GRACE days after creation),
+// approached at UNDATED_RATE of a dated task's pace, so aging alone raises
+// them toward - but not past - "as urgent as a due date" territory. Duration
+// shifts effD later (in the same exponent, not a separate penalty curve), so
+// a long task behaves like one with a further-out due date - naturally
+// capped between 0 and 100 by the exponential itself, never runs away.
+// Overdue (effD < 0) mirrors the same decay with the same TAU, saturating
+// toward 100+OVERDUE_CAP; since non-overdue score is always <=100 and
+// overdue score is always >100, overdue tasks always outrank on-time ones,
+// and duration has no effect on that band - only how late a task is does.
+// Backburner tasks ignore all of this and sit in their own bucket.
 const DAY_MS = 86400000;
-const TAU_DUE = 5;               // days for due-date urgency to decay by ~63%
-const TAU_OVERDUE = 5;           // days for overdue bonus to approach its cap
-const OVERDUE_BONUS_CAP = 50;    // overdue tasks range from 100 up to 100+this
-const UNDATED_HALF_LIFE = 7;     // days for undated urgency to reach half its ceiling
-const UNDATED_CEILING = 100 * Math.exp(-7 / TAU_DUE); // "as urgent as due in ~a week"
-const DURATION_SCALE = 20;       // max points a task's duration can remove, at weight=1
-const DURATION_HALF_HOURS = 4;   // hours for the duration penalty to reach half its cap
+// All five below are user-editable in the priority settings panel; these are
+// just the fallback defaults, loaded/saved via loadParam()/saveParam().
+let TAU = loadParam('tau', 5);                     // days for urgency to decay (due-side) or saturate (overdue-side)
+let OVERDUE_CAP = loadParam('overdueCap', 50);     // overdue tasks range from 100 up to 100+this
+let UNDATED_GRACE = loadParam('undatedGrace', 7);  // days before an undated task starts behaving like it's "due"
+let UNDATED_RATE = loadParam('undatedRate', 0.5);  // undated tasks accrue urgency at this fraction of a dated task's rate (0.5 = 2:1)
 
 function daysUntil(task){
   if(!task.dueDate) return null; // no due date
@@ -626,26 +716,22 @@ function daysSinceCreated(task){
   return (Date.now() - created) / DAY_MS;
 }
 
-function durationPenalty(hrs){
-  return weight * DURATION_SCALE * (hrs / (hrs + DURATION_HALF_HOURS));
+function effectiveDaysUntilDue(task){
+  const d = daysUntil(task);
+  if(d !== null) return d;
+  const age = Math.max(daysSinceCreated(task), 0);
+  return UNDATED_GRACE - age * UNDATED_RATE;
 }
 
 function computeScore(task){
   const hrs = (task.durationMin || 0) / 60;
-  const d = daysUntil(task);
+  const effD = effectiveDaysUntilDue(task);
 
-  if(d === null){
-    // Undated: saturating curve toward UNDATED_CEILING, never reaching it.
-    const age = Math.max(daysSinceCreated(task), 0);
-    const urgency = UNDATED_CEILING * (age / (age + UNDATED_HALF_LIFE));
-    return Math.max(0, urgency - durationPenalty(hrs));
+  if(effD < 0){
+    return 100 + OVERDUE_CAP * (1 - Math.exp(effD / TAU));
   }
-  if(d < 0){
-    // overdue: score grows the more overdue it is, always > any on-time score band
-    return 100 + OVERDUE_BONUS_CAP * (1 - Math.exp(Math.abs(d) / -TAU_OVERDUE));
-  }
-  const urgency = 100 * Math.exp(-d / TAU_DUE);
-  return Math.max(0, urgency - durationPenalty(hrs));
+  const durationDays = weight * hrs; // weight doubles as "days of delay per hour of duration"
+  return 100 * Math.exp(-(effD + durationDays) / TAU);
 }
 
 /* ---------- Priority color gradient ---------- */
@@ -679,13 +765,6 @@ function priorityRgb(frac){
   if(frac <= 0.5) return lerpHex('#3f6ba8', '#5894e0', frac / 0.5);
   return lerpHex('#5894e0', '#d9704f', (frac - 0.5) / 0.5);
 }
-function lerpTowardsPanel(rgb, amount){
-  const panel = hexToRgb('#1c2025');
-  const r = Math.round(panel.r + (rgb.r - panel.r) * amount);
-  const g = Math.round(panel.g + (rgb.g - panel.g) * amount);
-  const b = Math.round(panel.b + (rgb.b - panel.b) * amount);
-  return `${r},${g},${b}`;
-}
 function priorityFrac(task){
   if(task.backburner) return 0;
   const d = daysUntil(task);
@@ -696,6 +775,7 @@ function priorityFrac(task){
 }
 
 function isBlocked(task){
+  if(task.startDate && new Date(task.startDate + 'T00:00:00') > new Date()) return true;
   if(!task.prereqIds || task.prereqIds.length === 0) return false;
   return task.prereqIds.some(pid => {
     const p = tasks.find(t => t.id === pid);
@@ -910,8 +990,7 @@ function renderTask(t){
   if(!t.done && !t.backburner){
     const frac = priorityFrac(t);
     const c = priorityRgb(frac);
-    el.style.borderColor = `rgba(${c.r},${c.g},${c.b},${(0.25 + frac * 0.55).toFixed(2)})`;
-    el.style.background = `rgb(${lerpTowardsPanel(c, 0.06 + frac * 0.14)})`;
+    el.style.borderColor = `rgba(${c.r},${c.g},${c.b},${(0.35 + frac * 0.65).toFixed(2)})`;
   }
 
   const bar = document.createElement('div');
@@ -938,6 +1017,19 @@ function renderTask(t){
   title.className = 'task-title';
   title.textContent = t.title;
   mainCol.appendChild(title);
+
+  if(!t.done && !t.backburner){
+    const frac = priorityFrac(t);
+    const c = priorityRgb(frac);
+    const meter = document.createElement('div');
+    meter.className = 'urgency-meter';
+    const meterFill = document.createElement('div');
+    meterFill.className = 'urgency-meter-fill';
+    meterFill.style.width = `${Math.round(frac * 100)}%`;
+    meterFill.style.background = `rgb(${c.r},${c.g},${c.b})`;
+    meter.appendChild(meterFill);
+    mainCol.appendChild(meter);
+  }
 
   const meta = document.createElement('div');
   meta.className = 'task-meta';
@@ -1035,6 +1127,7 @@ function spawnNextRecurrence(t){
     done: false,
     completedAt: null,
     prereqIds: [], // independent prerequisites per spec
+    startDate: null, // a stale start-date gate from the prior occurrence shouldn't carry forward
     dueDate: nextRecurDate(t.dueDate, t.recurFreq)
   };
   tasks.push(next);
@@ -1161,6 +1254,7 @@ function openAddModal(presetProjectId){
   document.getElementById('dueFieldsRow').style.display = 'none';
   document.getElementById('recurToggleRow').style.display = 'none';
   document.getElementById('f-dur').value = 30;
+  document.getElementById('f-startdate').value = '';
   document.getElementById('f-notes').value = '';
   durUnit = 'min';
   document.querySelectorAll('.unit-btn').forEach(b => b.classList.toggle('active', b.dataset.unit === 'min'));
@@ -1194,6 +1288,7 @@ function openEditModal(id){
     document.getElementById('f-dur').value = t.durationMin;
   }
   document.querySelectorAll('.unit-btn').forEach(b => b.classList.toggle('active', b.dataset.unit === durUnit));
+  document.getElementById('f-startdate').value = t.startDate || '';
   document.getElementById('f-notes').value = t.notes || '';
   document.getElementById('f-backburner').checked = !!t.backburner;
   document.getElementById('f-recurs').checked = !!t.recurs;
@@ -1265,6 +1360,7 @@ function renderProjSelect(selectedId){
         list.querySelectorAll('.proj-dropdown-item').forEach(x => x.classList.remove('selected'));
         item.classList.add('selected');
         list.style.display = 'none';
+        renderPrereqList(editingTaskId, []); // prereqs are project-scoped, so a project switch clears the old ones
       });
       list.appendChild(item);
     });
@@ -1281,6 +1377,7 @@ function renderProjSelect(selectedId){
     pill.addEventListener('click', () => {
       row.querySelectorAll('.proj-pill').forEach(x => x.classList.remove('selected'));
       pill.classList.add('selected');
+      renderPrereqList(editingTaskId, []); // prereqs are project-scoped, so a project switch clears the old ones
     });
     row.appendChild(pill);
   });
@@ -1307,38 +1404,53 @@ function getSelectedProjId(){
   return sel ? sel.dataset.projId : projects[0].id;
 }
 
+function updatePrereqLabel(){
+  const label = document.getElementById('prereqDropdownLabel');
+  const checked = document.querySelectorAll('#prereqList input:checked');
+  if(checked.length === 0){ label.textContent = 'None selected'; return; }
+  if(checked.length === 1){ label.textContent = checked[0].closest('.prereq-item').querySelector('span:last-child').textContent; return; }
+  label.textContent = `${checked.length} prerequisites selected`;
+}
+
+// Only tasks within the same project can be prerequisites - keeps the list short
+// and avoids cross-project dependency chains that are hard to reason about.
 function renderPrereqList(currentTaskId, checkedIds){
   const field = document.getElementById('prereqField');
+  const dropdownBtn = document.getElementById('prereqDropdownBtn');
   const list = document.getElementById('prereqList');
   list.innerHTML = '';
-  const candidates = tasks.filter(t => t.id !== currentTaskId && !t.done);
+  list.style.display = 'none';
+  const projectId = getSelectedProjId();
+  const candidates = tasks.filter(t => t.id !== currentTaskId && !t.done && t.projectId === projectId);
+  field.style.display = 'block';
   if(candidates.length === 0){
-    field.style.display = 'block';
-    list.innerHTML = '<div class="prereq-empty">No other open tasks yet.</div>';
+    dropdownBtn.style.display = 'none';
+    list.style.display = 'flex';
+    list.innerHTML = '<div class="prereq-empty">No other open tasks in this project yet.</div>';
     return;
   }
-  field.style.display = 'block';
+  dropdownBtn.style.display = 'flex';
   candidates.forEach(c => {
-    const cProj = projFor(c);
     const row = document.createElement('label');
     row.className = 'prereq-item';
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.value = c.id;
     cb.checked = (checkedIds || []).includes(c.id);
+    cb.addEventListener('change', updatePrereqLabel);
     row.appendChild(cb);
-    if(cProj){
-      const swatch = document.createElement('span');
-      swatch.className = 'swatch';
-      swatch.style.cssText = `width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:${cProj.color}`;
-      row.appendChild(swatch);
-    }
     const span = document.createElement('span');
     span.textContent = c.title;
     row.appendChild(span);
     list.appendChild(row);
   });
+  updatePrereqLabel();
 }
+
+document.getElementById('prereqDropdownBtn').addEventListener('click', () => {
+  const list = document.getElementById('prereqList');
+  list.style.display = list.style.display === 'none' ? 'flex' : 'none';
+});
 
 document.getElementById('saveTaskBtn').addEventListener('click', () => {
   const title = document.getElementById('f-title').value.trim();
@@ -1354,14 +1466,15 @@ document.getElementById('saveTaskBtn').addEventListener('click', () => {
   const recurFreq = document.getElementById('f-recur-freq').value;
   const prereqIds = Array.from(document.querySelectorAll('#prereqList input:checked')).map(cb => cb.value);
   const notes = document.getElementById('f-notes').value.trim();
+  const startDate = document.getElementById('f-startdate').value || null;
 
   if(editingTaskId){
     const t = tasks.find(x => x.id === editingTaskId);
-    Object.assign(t, {title, dueDate, dueTime, durationMin, projectId, backburner, recurs, recurFreq, prereqIds, notes});
+    Object.assign(t, {title, dueDate, dueTime, durationMin, projectId, backburner, recurs, recurFreq, prereqIds, notes, startDate});
   } else {
     tasks.push({
       id: uid(), title, dueDate, dueTime, durationMin, projectId,
-      backburner, recurs, recurFreq, prereqIds, notes,
+      backburner, recurs, recurFreq, prereqIds, notes, startDate,
       done:false, completedAt:null, createdAt: Date.now()
     });
   }
@@ -1518,22 +1631,40 @@ document.getElementById('deleteProjBtn').addEventListener('click', () => {
   );
 });
 
-/* ---------- Weight Settings ---------- */
+/* ---------- Priority Settings ---------- */
 const weightSettings = document.getElementById('weightSettings');
-const weightSlider = document.getElementById('weightSlider');
-const weightVal = document.getElementById('weightVal');
+
+// Each scoring parameter's slider wired the same way: live-preview on input,
+// persisted only when the panel is closed (matches the prior weight-only behavior).
+const scoreParams = [
+  {slider: document.getElementById('weightSlider'), val: document.getElementById('weightVal'), decimals: 2,
+   get: () => weight, set: v => { weight = v; }, save: saveWeight},
+  {slider: document.getElementById('tauSlider'), val: document.getElementById('tauVal'), decimals: 1,
+   get: () => TAU, set: v => { TAU = v; }, save: v => saveParam('tau', v)},
+  {slider: document.getElementById('overdueCapSlider'), val: document.getElementById('overdueCapVal'), decimals: 0,
+   get: () => OVERDUE_CAP, set: v => { OVERDUE_CAP = v; }, save: v => saveParam('overdueCap', v)},
+  {slider: document.getElementById('undatedGraceSlider'), val: document.getElementById('undatedGraceVal'), decimals: 0,
+   get: () => UNDATED_GRACE, set: v => { UNDATED_GRACE = v; }, save: v => saveParam('undatedGrace', v)},
+  {slider: document.getElementById('undatedRateSlider'), val: document.getElementById('undatedRateVal'), decimals: 2,
+   get: () => UNDATED_RATE, set: v => { UNDATED_RATE = v; }, save: v => saveParam('undatedRate', v)},
+];
 
 document.getElementById('weightBtn').addEventListener('click', () => {
-  weightSlider.value = weight;
-  weightVal.textContent = weight.toFixed(2);
+  scoreParams.forEach(p => {
+    p.slider.value = p.get();
+    p.val.textContent = p.get().toFixed(p.decimals);
+  });
   weightSettings.classList.add('open');
 });
-weightSlider.addEventListener('input', () => {
-  weight = parseFloat(weightSlider.value);
-  weightVal.textContent = weight.toFixed(2);
+scoreParams.forEach(p => {
+  p.slider.addEventListener('input', () => {
+    const v = parseFloat(p.slider.value);
+    p.set(v);
+    p.val.textContent = v.toFixed(p.decimals);
+  });
 });
 document.getElementById('closeWeightBtn').addEventListener('click', () => {
-  saveWeight(weight);
+  scoreParams.forEach(p => p.save(p.get()));
   weightSettings.classList.remove('open');
   render();
 });
@@ -1577,7 +1708,7 @@ function enableSwipeToDismiss(handle){
   handle.addEventListener('pointercancel', endDrag);
 }
 
-document.querySelectorAll('.modal-handle').forEach(enableSwipeToDismiss);
+document.querySelectorAll('.modal-header').forEach(enableSwipeToDismiss);
 
 /* ---------- Init ---------- */
 render();
