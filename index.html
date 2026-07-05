@@ -987,10 +987,13 @@ function renderTask(t){
   const el = document.createElement('div');
   el.className = 'task' + (t.done ? ' done' : '') + (t.backburner ? ' backburner' : '');
 
+  const overdue = d !== null && d < 0;
   if(!t.done && !t.backburner){
     const frac = priorityFrac(t);
-    const c = priorityRgb(frac);
-    el.style.borderColor = `rgba(${c.r},${c.g},${c.b},${(0.35 + frac * 0.65).toFixed(2)})`;
+    const c = overdue ? {r:224, g:36, b:36} : priorityRgb(frac);
+    const alpha = overdue ? 1 : (0.35 + frac * 0.65).toFixed(2);
+    const urgencyColor = `rgba(${c.r},${c.g},${c.b},${alpha})`;
+    el.style.borderColor = `${urgencyColor} ${urgencyColor} ${urgencyColor} var(--line)`;
   }
 
   const bar = document.createElement('div');
@@ -1020,7 +1023,7 @@ function renderTask(t){
 
   if(!t.done && !t.backburner){
     const frac = priorityFrac(t);
-    const c = priorityRgb(frac);
+    const c = overdue ? {r:224, g:36, b:36} : priorityRgb(frac);
     const meter = document.createElement('div');
     meter.className = 'urgency-meter';
     const meterFill = document.createElement('div');
