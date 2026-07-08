@@ -218,6 +218,22 @@
   .fab svg{width:24px;height:24px;display:block;}
   .fab:active{transform:scale(0.94);}
 
+  .update-toast{
+    position:fixed;left:14px;right:14px;bottom:92px;z-index:35;
+    background:var(--panel-2);border:1px solid var(--line);border-radius:12px;
+    padding:12px 14px;
+    display:none;align-items:center;justify-content:space-between;gap:12px;
+    box-shadow:0 4px 16px rgba(0,0,0,0.35);
+    animation:slideup 0.22s ease-out;
+  }
+  .update-toast.show{display:flex;}
+  .update-toast span{font-size:13.5px;font-weight:600;color:var(--text);}
+  .update-toast button{
+    flex:0 0 auto;padding:8px 14px;border-radius:8px;
+    background:var(--amber);color:var(--accent-ink);border:none;
+    font-size:13px;font-weight:700;
+  }
+
   /* Modal */
   .modal-backdrop{
     position:fixed;inset:0;background:rgba(10,11,13,0.7);
@@ -356,7 +372,7 @@
   ::-webkit-scrollbar{width:0;height:0;}
 
   @media (prefers-reduced-motion: reduce){
-    .modal, .fab, .checkbtn, .task{animation:none !important;transition:none !important;}
+    .modal, .fab, .checkbtn, .task, .update-toast{animation:none !important;transition:none !important;}
     .checkbtn svg{animation:none !important;}
   }
 </style>
@@ -395,6 +411,11 @@
 <button class="fab" id="fabAdd" aria-label="Add task">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 </button>
+
+<div class="update-toast" id="updateToast">
+  <span>Update available</span>
+  <button type="button" id="updateReloadBtn">Reload</button>
+</div>
 
 <!-- Task edit modal -->
 <div class="modal-backdrop" id="taskModalBackdrop">
@@ -1828,9 +1849,18 @@ document.querySelectorAll('.modal-header').forEach(enableSwipeToDismiss);
 render();
 
 /* ---------- Service worker registration ---------- */
+document.getElementById('updateReloadBtn').addEventListener('click', () => location.reload());
+
 if('serviceWorker' in navigator){
   window.addEventListener('load', () => {
+    // A controllerchange on first-ever install (no prior controller) isn't an
+    // update - only prompt when a new worker replaces one that was already
+    // controlling this page.
+    const hadController = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.register('sw.js').catch(()=>{});
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if(hadController) document.getElementById('updateToast').classList.add('show');
+    });
   });
 }
 </script>
