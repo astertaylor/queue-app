@@ -138,7 +138,8 @@
   .task.completing{opacity:0.55;transform:scale(0.99);}
   @keyframes checkPop{0%{transform:scale(0);}60%{transform:scale(1.3);}100%{transform:scale(1);}}
   .checkbtn.checked svg{animation:checkPop 0.28s ease-out;}
-  .pin-btn{flex:0 0 auto;width:22px;height:22px;border:none;background:transparent;color:var(--text-faint);margin-top:1px;display:flex;align-items:center;justify-content:center;padding:0;}
+  .check-col{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:4px;}
+  .pin-btn{flex:0 0 auto;width:22px;height:22px;border:none;background:transparent;color:var(--text-faint);display:flex;align-items:center;justify-content:center;padding:0;}
   .pin-btn svg{width:15px;height:15px;}
   .pin-btn.active{color:var(--highlight);}
   .proj-bar{width:4px;flex:0 0 4px;}
@@ -1058,6 +1059,9 @@ function renderTask(t){
   const top = document.createElement('div');
   top.className = 'task-top';
 
+  const checkCol = document.createElement('div');
+  checkCol.className = 'check-col';
+
   const check = document.createElement('button');
   check.className = 'checkbtn' + (t.done ? ' checked' : '');
   check.innerHTML = t.done ? CHECK_SVG : '';
@@ -1083,7 +1087,7 @@ function renderTask(t){
     }, 550);
     pendingComplete.set(t.id, handle);
   });
-  top.appendChild(check);
+  checkCol.appendChild(check);
 
   if(!t.done){
     const pin = document.createElement('button');
@@ -1091,8 +1095,10 @@ function renderTask(t){
     pin.setAttribute('aria-label', isHighlighted(t) ? 'Remove highlight' : 'Highlight task');
     pin.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.26L21.5 9l-5 4.87L17.8 21 12 17.77 6.2 21l1.3-7.13-5-4.87 6.6-.74L12 2z"/></svg>';
     pin.addEventListener('click', (e) => { e.stopPropagation(); toggleHighlight(t.id); });
-    top.appendChild(pin);
+    checkCol.appendChild(pin);
   }
+
+  top.appendChild(checkCol);
 
   const mainCol = document.createElement('div');
   mainCol.className = 'task-main';
