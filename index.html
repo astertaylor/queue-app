@@ -22,6 +22,7 @@
     --done:#5c8a72;
     --backburner:#565c65;
     --focus:#5894e0;
+    --highlight:#e8c547;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--text);}
@@ -57,6 +58,9 @@
     scrollbar-width:none;
   }
   .filterbar::-webkit-scrollbar{display:none;}
+  .hidden-toggle-row{display:none;align-items:center;gap:10px;margin-top:8px;}
+  .hidden-toggle-row.show{display:flex;}
+  .hidden-toggle-row span{font-size:12.5px;color:var(--text-dim);font-weight:600;}
   .chip{
     flex:0 0 auto;
     padding:5px 11px;border-radius:20px;
@@ -75,6 +79,7 @@
     color:var(--text-faint);margin:18px 4px 8px;
   }
   .section-label.overdue-label{color:var(--overdue);}
+  .section-label.highlight-label{color:var(--highlight);}
   .section-label:first-child{margin-top:2px;}
 
   .proj-group{margin-bottom:6px;}
@@ -122,11 +127,20 @@
     border-radius:10px;
     margin-bottom:8px;
     overflow:hidden;
+    transition:opacity 0.35s ease, transform 0.35s ease;
   }
   .urgency-meter{width:100%;height:4px;background:var(--panel-2);border-radius:2px;overflow:hidden;margin-top:7px;}
   .urgency-meter-fill{height:100%;border-radius:2px;}
   .task.done{opacity:0.5;}
   .task.backburner{opacity:0.62;}
+  .task.highlighted{background:#26210f;}
+  .task.hidden-task{opacity:0.55;}
+  .task.completing{opacity:0.55;transform:scale(0.99);}
+  @keyframes checkPop{0%{transform:scale(0);}60%{transform:scale(1.3);}100%{transform:scale(1);}}
+  .checkbtn.checked svg{animation:checkPop 0.28s ease-out;}
+  .pin-btn{flex:0 0 auto;width:22px;height:22px;border:none;background:transparent;color:var(--text-faint);margin-top:1px;display:flex;align-items:center;justify-content:center;padding:0;}
+  .pin-btn svg{width:15px;height:15px;}
+  .pin-btn.active{color:var(--highlight);}
   .proj-bar{width:4px;flex:0 0 4px;}
   .task-body{flex:1;padding:10px 12px;min-width:0;}
   .task-top{display:flex;align-items:flex-start;gap:10px;}
@@ -341,7 +355,8 @@
   ::-webkit-scrollbar{width:0;height:0;}
 
   @media (prefers-reduced-motion: reduce){
-    .modal, .fab, .checkbtn{animation:none !important;transition:none !important;}
+    .modal, .fab, .checkbtn, .task{animation:none !important;transition:none !important;}
+    .checkbtn svg{animation:none !important;}
   }
 </style>
 </head>
@@ -359,6 +374,13 @@
     <button class="icon-btn" id="weightBtn" style="margin-left:auto;flex:0 0 auto;" aria-label="Priority settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 005 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
     </button>
+  </div>
+  <div class="hidden-toggle-row" id="hiddenToggleRow">
+    <label class="switch">
+      <input type="checkbox" id="showHiddenToggle">
+      <span class="slider-tog"></span>
+    </label>
+    <span>Show hidden tasks</span>
   </div>
 </header>
 
@@ -669,6 +691,9 @@ let currentFilter = 'all';
 let editingTaskId = null;
 let durUnit = 'min';
 let collapsedProjects = new Set(JSON.parse(localStorage.getItem('queue_collapsed_v1') || '[]'));
+let showHidden = localStorage.getItem('queue_showhidden_v1') === '1';
+let pendingComplete = new Map(); // task id -> setTimeout handle, for the undo-able check animation
+const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>';
 
 function saveCollapsed(){
   localStorage.setItem('queue_collapsed_v1', JSON.stringify(Array.from(collapsedProjects)));
@@ -783,6 +808,16 @@ function isBlocked(task){
   });
 }
 
+// A task is highlighted if the user pinned it explicitly (true/false), or,
+// absent an explicit choice, if it's due today.
+function isDueToday(task){
+  const d = daysUntil(task);
+  return d !== null && d >= 0 && d < 1;
+}
+function isHighlighted(task){
+  return task.highlighted === undefined ? isDueToday(task) : !!task.highlighted;
+}
+
 /* ---------- Rendering ---------- */
 function fmtDue(task){
   if(!task.dueDate) return null;
@@ -814,26 +849,31 @@ function getVisibleTasks(){
     if(currentFilter === 'done') return t.done;
     return !t.done; // 'all' / 'byproject' show not-done; done tasks live under 'done' tab
   });
-  // Hide blocked tasks from the queue entirely per spec (only show once prereqs met)
-  if(currentFilter !== 'done'){
+  // Hide blocked tasks from the queue entirely per spec (only show once prereqs met),
+  // unless the "show hidden tasks" switch is on in the By project tab.
+  const revealHidden = currentFilter === 'byproject' && showHidden;
+  if(currentFilter !== 'done' && !revealHidden){
     list = list.filter(t => !isBlocked(t));
   }
   return list;
 }
 
 function sortTasks(list){
+  const highlighted = [];
   const overdue = [];
   const normal = [];
   const backburner = [];
   list.forEach(t => {
+    if(isHighlighted(t)){ highlighted.push(t); return; }
     if(t.backburner){ backburner.push(t); return; }
     const d = daysUntil(t);
     if(d < 0) overdue.push(t); else normal.push(t);
   });
+  highlighted.sort((a,b) => computeScore(b) - computeScore(a));
   overdue.sort((a,b) => computeScore(b) - computeScore(a));
   normal.sort((a,b) => computeScore(b) - computeScore(a));
   backburner.sort((a,b) => computeScore(b) - computeScore(a));
-  return {overdue, normal, backburner};
+  return {highlighted, overdue, normal, backburner};
 }
 
 function render(){
@@ -865,14 +905,18 @@ function render(){
     return;
   }
 
-  const {overdue, normal, backburner} = sortTasks(list);
+  const {highlighted, overdue, normal, backburner} = sortTasks(list);
 
+  if(highlighted.length){
+    main.appendChild(sectionLabel('Highlighted', false, true));
+    main.appendChild(renderGroup(highlighted));
+  }
   if(overdue.length){
     main.appendChild(sectionLabel('Overdue', true));
     main.appendChild(renderGroup(overdue));
   }
   if(normal.length){
-    if(overdue.length) main.appendChild(sectionLabel('Up next', false));
+    if(overdue.length || highlighted.length) main.appendChild(sectionLabel('Up next', false));
     main.appendChild(renderGroup(normal));
   }
   if(backburner.length){
@@ -881,9 +925,9 @@ function render(){
   }
 }
 
-function sectionLabel(text, isOverdue){
+function sectionLabel(text, isOverdue, isHighlight){
   const div = document.createElement('div');
-  div.className = 'section-label' + (isOverdue ? ' overdue-label' : '');
+  div.className = 'section-label' + (isOverdue ? ' overdue-label' : '') + (isHighlight ? ' highlight-label' : '');
   div.textContent = text;
   return div;
 }
@@ -903,8 +947,8 @@ function renderByProject(list, main){
   projects.forEach(proj => {
     const projTasks = list.filter(t => t.projectId === proj.id);
 
-    const {overdue, normal, backburner} = sortTasks(projTasks);
-    const ordered = [...overdue, ...normal, ...backburner];
+    const {highlighted, overdue, normal, backburner} = sortTasks(projTasks);
+    const ordered = [...highlighted, ...overdue, ...normal, ...backburner];
 
     const groupEl = document.createElement('div');
     groupEl.className = 'proj-group';
@@ -933,12 +977,16 @@ function renderByProject(list, main){
     const body = document.createElement('div');
     body.className = 'proj-group-body' + (isCollapsed ? ' collapsed' : '');
 
+    if(highlighted.length){
+      body.appendChild(sectionLabel('Highlighted', false, true));
+      body.appendChild(renderGroup(highlighted));
+    }
     if(overdue.length){
       body.appendChild(sectionLabel('Overdue', true));
       body.appendChild(renderGroup(overdue));
     }
     if(normal.length){
-      if(overdue.length) body.appendChild(sectionLabel('Up next', false));
+      if(overdue.length || highlighted.length) body.appendChild(sectionLabel('Up next', false));
       body.appendChild(renderGroup(normal));
     }
     if(backburner.length){
@@ -985,7 +1033,8 @@ function renderTask(t){
   const d = daysUntil(t);
 
   const el = document.createElement('div');
-  el.className = 'task' + (t.done ? ' done' : '') + (t.backburner ? ' backburner' : '');
+  el.className = 'task' + (t.done ? ' done' : '') + (t.backburner ? ' backburner' : '')
+    + (!t.done && isHighlighted(t) ? ' highlighted' : '') + (!t.done && isBlocked(t) ? ' hidden-task' : '');
 
   const overdue = d !== null && d < 0;
   const stripeColor = proj ? proj.color : 'var(--line)';
@@ -1011,9 +1060,39 @@ function renderTask(t){
 
   const check = document.createElement('button');
   check.className = 'checkbtn' + (t.done ? ' checked' : '');
-  check.innerHTML = t.done ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>' : '';
-  check.addEventListener('click', (e) => { e.stopPropagation(); toggleDone(t.id); });
+  check.innerHTML = t.done ? CHECK_SVG : '';
+  check.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if(t.done){ toggleDone(t.id); return; }
+    if(pendingComplete.has(t.id)){
+      // second tap during the grace window: undo, no data change
+      clearTimeout(pendingComplete.get(t.id));
+      pendingComplete.delete(t.id);
+      el.classList.remove('completing');
+      check.classList.remove('checked');
+      check.innerHTML = '';
+      return;
+    }
+    // show the checked/grayed state immediately, commit after a short grace window
+    el.classList.add('completing');
+    check.classList.add('checked');
+    check.innerHTML = CHECK_SVG;
+    const handle = setTimeout(() => {
+      pendingComplete.delete(t.id);
+      toggleDone(t.id);
+    }, 550);
+    pendingComplete.set(t.id, handle);
+  });
   top.appendChild(check);
+
+  if(!t.done){
+    const pin = document.createElement('button');
+    pin.className = 'pin-btn' + (isHighlighted(t) ? ' active' : '');
+    pin.setAttribute('aria-label', isHighlighted(t) ? 'Remove highlight' : 'Highlight task');
+    pin.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.26L21.5 9l-5 4.87L17.8 21 12 17.77 6.2 21l1.3-7.13-5-4.87 6.6-.74L12 2z"/></svg>';
+    pin.addEventListener('click', (e) => { e.stopPropagation(); toggleHighlight(t.id); });
+    top.appendChild(pin);
+  }
 
   const mainCol = document.createElement('div');
   mainCol.className = 'task-main';
@@ -1075,6 +1154,13 @@ function renderTask(t){
     bTag.textContent = 'Backburner';
     meta.appendChild(bTag);
   }
+  if(!t.done && isBlocked(t)){
+    const hTag = document.createElement('span');
+    hTag.className = 'tag blocked';
+    const notStarted = t.startDate && new Date(t.startDate + 'T00:00:00') > new Date();
+    hTag.textContent = notStarted ? 'Not started yet' : 'Blocked';
+    meta.appendChild(hTag);
+  }
 
   if(t.notes){
     const notesEl = document.createElement('div');
@@ -1121,6 +1207,14 @@ function toggleDone(id){
   if(t.done && t.recurs){
     spawnNextRecurrence(t);
   }
+  saveTasks(tasks);
+  render();
+}
+
+function toggleHighlight(id){
+  const t = tasks.find(x => x.id === id);
+  if(!t) return;
+  t.highlighted = !isHighlighted(t);
   saveTasks(tasks);
   render();
 }
@@ -1242,6 +1336,15 @@ document.getElementById('filterBar').addEventListener('click', (e) => {
   document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
   chip.classList.add('active');
   currentFilter = chip.dataset.filter;
+  document.getElementById('hiddenToggleRow').classList.toggle('show', currentFilter === 'byproject');
+  render();
+});
+
+const showHiddenToggle = document.getElementById('showHiddenToggle');
+showHiddenToggle.checked = showHidden;
+showHiddenToggle.addEventListener('change', (e) => {
+  showHidden = e.target.checked;
+  localStorage.setItem('queue_showhidden_v1', showHidden ? '1' : '0');
   render();
 });
 
