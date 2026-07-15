@@ -81,6 +81,7 @@
   .section-label.overdue-label{color:var(--overdue);}
   .section-label.highlight-label{color:var(--highlight);}
   .section-label:first-child{margin-top:2px;}
+  .section-label .label-suffix{color:var(--text-dim);font-size:12px;font-weight:400;text-transform:none;letter-spacing:normal;}
 
   .proj-group{margin-bottom:6px;}
   .proj-group-header{
@@ -124,7 +125,7 @@
     display:flex;align-items:stretch;gap:0;
     background:var(--panel);
     border:3px solid transparent;
-    border-radius:10px;
+    border-radius:7px;
     margin-bottom:8px;
     overflow:hidden;
     transition:opacity 0.35s ease, transform 0.35s ease;
@@ -930,7 +931,7 @@ function render(){
   const {highlighted, overdue, normal, backburner} = sortTasks(list);
 
   if(highlighted.length){
-    main.appendChild(sectionLabel('Highlighted', false, true));
+    main.appendChild(sectionLabel('Highlighted', false, true, fmtDur(totalDuration(highlighted))));
     main.appendChild(renderGroup(highlighted));
   }
   if(overdue.length){
@@ -947,11 +948,20 @@ function render(){
   }
 }
 
-function sectionLabel(text, isOverdue, isHighlight){
+function sectionLabel(text, isOverdue, isHighlight, suffix){
   const div = document.createElement('div');
   div.className = 'section-label' + (isOverdue ? ' overdue-label' : '') + (isHighlight ? ' highlight-label' : '');
   div.textContent = text;
+  if(suffix){
+    const span = document.createElement('span');
+    span.className = 'label-suffix';
+    span.textContent = ` (${suffix})`;
+    div.appendChild(span);
+  }
   return div;
+}
+function totalDuration(list){
+  return list.reduce((sum, t) => sum + (t.durationMin || 0), 0);
 }
 
 function renderGroup(list){
@@ -1000,7 +1010,7 @@ function renderByProject(list, main){
     body.className = 'proj-group-body' + (isCollapsed ? ' collapsed' : '');
 
     if(highlighted.length){
-      body.appendChild(sectionLabel('Highlighted', false, true));
+      body.appendChild(sectionLabel('Highlighted', false, true, fmtDur(totalDuration(highlighted))));
       body.appendChild(renderGroup(highlighted));
     }
     if(overdue.length){
