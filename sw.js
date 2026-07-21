@@ -1,4 +1,4 @@
-const CACHE_NAME = 'queue-cache-v12';
+const CACHE_NAME = 'queue-cache-v0.13';
 const ASSETS = [
   './',
   './index.html',

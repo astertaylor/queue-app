@@ -777,11 +777,28 @@ function daysSinceCreated(task){
   return (Date.now() - created) / DAY_MS;
 }
 
-function effectiveDaysUntilDue(task){
+function ownDaysUntilDue(task){
   const d = daysUntil(task);
   if(d !== null) return d;
   const age = Math.max(daysSinceCreated(task), 0);
   return UNDATED_GRACE - age * UNDATED_RATE;
+}
+
+// Tasks that list `task` as a prerequisite: `task` must finish before they can start,
+// so `task` inherits urgency from whichever of them is most pressing.
+function dependents(task){
+  return tasks.filter(t => !t.done && Array.isArray(t.prereqIds) && t.prereqIds.includes(task.id));
+}
+
+function effectiveDaysUntilDue(task, visited){
+  visited = visited || new Set();
+  if(visited.has(task.id)) return Infinity; // guard against a prereq cycle
+  visited.add(task.id);
+  const own = ownDaysUntilDue(task);
+  const deps = dependents(task);
+  if(deps.length === 0) return own;
+  const depMin = Math.min(...deps.map(d => effectiveDaysUntilDue(d, visited)));
+  return Math.min(own, depMin);
 }
 
 function computeScore(task){
@@ -858,6 +875,10 @@ function expireProjectBackburners(){
 
 function isBlocked(task){
   if(task.startDate && new Date(task.startDate + 'T00:00:00') > new Date()) return true;
+  if(task.recurs && task.dueDate){
+    const d = daysUntil(task);
+    if(d !== null && d >= 1) return true; // repeating tasks stay hidden until their due date arrives
+  }
   if(!task.prereqIds || task.prereqIds.length === 0) return false;
   return task.prereqIds.some(pid => {
     const p = tasks.find(t => t.id === pid);
@@ -872,7 +893,11 @@ function isDueToday(task){
   return d !== null && d >= 0 && d < 1;
 }
 function isHighlighted(task){
-  return task.highlighted === undefined ? isDueToday(task) : !!task.highlighted;
+  if(task.highlighted !== undefined) return !!task.highlighted;
+  // A repeating task is only ever visible once its due date has arrived (see isBlocked),
+  // so any visible instance should default to highlighted rather than just today's.
+  if(task.recurs) return true;
+  return isDueToday(task);
 }
 
 /* ---------- Rendering ---------- */
@@ -1305,6 +1330,7 @@ function spawnNextRecurrence(t){
     completedAt: null,
     prereqIds: [], // independent prerequisites per spec
     startDate: null, // a stale start-date gate from the prior occurrence shouldn't carry forward
+    highlighted: undefined, // let the next occurrence re-default to highlighted, not inherit a prior un-pin
     dueDate: nextRecurDate(t.dueDate, t.recurFreq)
   };
   tasks.push(next);
